@@ -60,12 +60,29 @@ export async function executeLocalRuntime(input: {
             })
           : unsupportedProvider(runtime.provider);
   const secretRefs = runtime.environment.secretRefs;
+  const secretValues = runtimeSecretValues(runtime.environment.env, secretRefs);
   const events = input.store.appendSessionEvents(
     session.id,
-    result.events.map((event) => redactSecrets(event, secretRefs))
+    result.events.map((event) => redactRuntimeEvent(event, secretRefs, secretValues))
   );
-  const outcome = input.store.saveOutcome(redactSecrets({ ...result.outcome, eventsUploaded: events.length }, secretRefs));
+  const outcome = input.store.saveOutcome(redactSecrets({ ...result.outcome, eventsUploaded: events.length }, secretRefs, secretValues));
   return { events, outcome, session: input.store.getSession(session.id) };
+}
+
+function redactRuntimeEvent<T extends { summary: string; detail?: string }>(event: T, secretRefs: string[], secretValues: string[]): T {
+  const redacted = redactSecrets(event, secretRefs, secretValues);
+  if (typeof redacted.detail !== "string" || redacted.detail === event.detail) {
+    return redacted;
+  }
+  const summary = redacted.detail.trim().slice(0, 180);
+  return { ...redacted, summary: summary || redacted.summary };
+}
+
+function runtimeSecretValues(env: Record<string, string>, secretRefs: string[]) {
+  const refs = new Set(secretRefs.map((item) => item.toLowerCase()));
+  return Object.entries(env)
+    .filter(([key]) => refs.has(key.toLowerCase()))
+    .map(([, value]) => value);
 }
 
 function unsupportedProvider(provider: string): never {

@@ -325,9 +325,22 @@ describe("automomo API", () => {
 });
 
 async function registerDaemon(app: ReturnType<typeof createApp>, runtimeId: string, timestamp: string) {
+  const token = `runtime-admin-${runtimeId}-${timestamp}`;
+  await app.request(
+    "/api/api-keys",
+    json({
+      id: `key_${runtimeId}_${timestamp.replaceAll(/[^a-zA-Z0-9]/g, "_")}`,
+      name: "Runtime admin",
+      token,
+      scopes: [{ actions: ["daemons:register", "runtimes:write"] }]
+    })
+  );
   const res = await app.request(
     "/api/daemon/register",
-    json({ runtimeId, name: "Test daemon", provider: "pi", environment: { networkPolicy: "restricted", env: {}, secretRefs: [] } })
+    json(
+      { runtimeId, name: "Test daemon", provider: "pi", environment: { networkPolicy: "restricted", env: {}, secretRefs: [] } },
+      { authorization: `Bearer ${token}` }
+    )
   );
   const payload = (await res.json()) as { daemon: { id: string; runtimeId: string }; secret: string };
   return { ...payload, timestamp };

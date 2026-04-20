@@ -42,6 +42,8 @@ export interface AppEnv {
   bootstrapToken?: string;
   githubWebhookSecret?: string;
   allowLocalExecution?: boolean;
+  trustLocalExecutionWithoutAuth?: boolean;
+  allowInsecureGitHubWebhooks?: boolean;
   rateLimit?: RateLimitOptions;
 }
 
@@ -108,6 +110,10 @@ export function createApp(env: AppEnv = {}) {
   const bootstrapToken = env.bootstrapToken ?? process.env.AUTOMOMO_BOOTSTRAP_TOKEN;
   const githubWebhookSecret = env.githubWebhookSecret ?? process.env.AUTOMOMO_GITHUB_WEBHOOK_SECRET;
   const allowLocalExecution = env.allowLocalExecution ?? process.env.AUTOMOMO_ENABLE_LOCAL_EXECUTION === "true";
+  const trustLocalExecutionWithoutAuth =
+    env.trustLocalExecutionWithoutAuth ?? process.env.AUTOMOMO_TRUST_LOCAL_EXECUTION_WITHOUT_AUTH === "true";
+  const allowInsecureGitHubWebhooks =
+    env.allowInsecureGitHubWebhooks ?? process.env.AUTOMOMO_ALLOW_INSECURE_GITHUB_WEBHOOKS === "true";
   const rateLimiter = new InMemoryRateLimiter(env.rateLimit ?? { limit: 120, windowMs: 60_000 });
   const github = new GitHubClient({ fetchImpl: env.githubFetch });
 
@@ -230,7 +236,10 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/sessions", async (c) => {
     const body = await parseJson(c.req, createSessionBody);
-    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", body.codebaseId, requireApiKey, store, bootstrapToken);
+    const requestedRuntime = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
+    const sessionRequiresAuth =
+      requireApiKey || (allowLocalExecution && !trustLocalExecutionWithoutAuth && requestedRuntime?.mode === "local");
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", body.codebaseId, sessionRequiresAuth, store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
@@ -391,15 +400,21 @@ export function createApp(env: AppEnv = {}) {
       })
     );
     const timestamp = now();
-    const outcome = store.saveOutcome({
-      id: body.id ?? randomId("outcome"),
-      sessionId,
-      status: body.status,
-      summary: body.summary,
-      result: body.result,
-      eventsUploaded: store.listSessionEvents(sessionId).length,
-      createdAt: timestamp
-    });
+    const runtime = session.runtimeId ? store.getRuntime(session.runtimeId) : undefined;
+    const outcome = store.saveOutcome(
+      redactForRuntime(
+        {
+          id: body.id ?? randomId("outcome"),
+          sessionId,
+          status: body.status,
+          summary: body.summary,
+          result: body.result,
+          eventsUploaded: store.listSessionEvents(sessionId).length,
+          createdAt: timestamp
+        },
+        runtime
+      )
+    );
     return c.json({ outcome, session: store.getSession(sessionId) }, 201);
   });
   app.post("/api/sessions/:id/run-local", async (c) => {
@@ -407,7 +422,14 @@ export function createApp(env: AppEnv = {}) {
     if (!session) {
       return c.json({ error: "session not found" }, 404);
     }
-    const auth = await requireWriteAccess(c.req.raw.headers, "runtime:execute", session.codebaseId, requireApiKey, store, bootstrapToken);
+    const auth = await requireWriteAccess(
+      c.req.raw.headers,
+      "runtime:execute",
+      session.codebaseId,
+      requireApiKey || !trustLocalExecutionWithoutAuth,
+      store,
+      bootstrapToken
+    );
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
@@ -455,7 +477,8 @@ export function createApp(env: AppEnv = {}) {
   app.get("/api/runtimes", (c) => c.json({ runtimes: store.listRuntimes() }));
   app.post("/api/runtimes", async (c) => {
     const body = await parseJson(c.req, createRuntimeBody);
-    const auth = await requireWriteAccess(c.req.raw.headers, "runtimes:write", undefined, requireApiKey, store, bootstrapToken);
+    const runtimeRequiresAuth = requireApiKey || (allowLocalExecution && !trustLocalExecutionWithoutAuth && body.mode === "local");
+    const auth = await requireWriteAccess(c.req.raw.headers, "runtimes:write", undefined, runtimeRequiresAuth, store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
@@ -479,12 +502,15 @@ export function createApp(env: AppEnv = {}) {
 
   app.post("/api/daemon/register", async (c) => {
     const body = await parseJson(c.req, DaemonRegistrationSchema);
-    const auth = await requireWriteAccess(c.req.raw.headers, "daemons:register", undefined, requireApiKey, store, bootstrapToken);
+    const timestamp = now();
+    const existing = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
+    const auth = await requireWriteAccess(c.req.raw.headers, "daemons:register", undefined, requireApiKey || Boolean(existing), store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
-    const timestamp = now();
-    const existing = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
+    if (existing && !auth.bootstrap && (!auth.apiKey || !apiKeyCan(auth.apiKey, "runtimes:write"))) {
+      return c.json({ error: "existing runtime daemon binding requires runtimes:write" }, 403);
+    }
     const secret = randomSecret();
     const daemonId = body.daemonId ?? randomId("daemon");
     const runtime = store.saveRuntime({
@@ -616,7 +642,7 @@ export function createApp(env: AppEnv = {}) {
     const runtime = store.getRuntime(body.runtimeId);
     const events = store.appendSessionEvents(
       body.sessionId,
-      body.events.map((event) => redactSecrets(event, runtime?.environment.secretRefs ?? []))
+      body.events.map((event) => redactEventForRuntime(event, runtime))
     );
     store.updateSession(body.sessionId, { status: "running", updatedAt: now() });
     return c.json({ events });
@@ -635,7 +661,7 @@ export function createApp(env: AppEnv = {}) {
       throw err;
     }
     const runtime = store.getRuntime(body.runtimeId);
-    const outcome = store.saveOutcome(redactSecrets(body.outcome, runtime?.environment.secretRefs ?? []));
+    const outcome = store.saveOutcome(redactForRuntime(body.outcome, runtime));
     store.completeLease({ leaseId: body.leaseId, now: now() });
     return c.json({ outcome, session: store.getSession(body.sessionId) });
   });
@@ -653,17 +679,21 @@ export function createApp(env: AppEnv = {}) {
     if (!lease) {
       return c.json({ error: "lease not found or not owned by daemon" }, 409);
     }
+    const runtime = store.getRuntime(signed.body.runtimeId);
     store.appendSessionEvents(signed.body.sessionId, [
-      {
-        id: randomId("event"),
-        sessionId: signed.body.sessionId,
-        sequence: store.listSessionEvents(signed.body.sessionId).length,
-        kind: "failure",
-        summary: signed.body.reason,
-        detail: signed.body.detail,
-        metadata: signed.body.metadata,
-        createdAt: now()
-      }
+      redactEventForRuntime(
+        {
+          id: randomId("event"),
+          sessionId: signed.body.sessionId,
+          sequence: store.listSessionEvents(signed.body.sessionId).length,
+          kind: "failure",
+          summary: signed.body.reason,
+          detail: signed.body.detail,
+          metadata: signed.body.metadata,
+          createdAt: now()
+        },
+        runtime
+      )
     ]);
     audit(store, {
       actorType: "daemon",
@@ -671,7 +701,7 @@ export function createApp(env: AppEnv = {}) {
       action: "lease.fail",
       targetType: "lease",
       targetId: lease.id,
-      metadata: { reason: signed.body.reason },
+      metadata: redactForRuntime({ reason: signed.body.reason }, runtime),
       createdAt: now()
     });
     return c.json({ lease, session: store.getSession(signed.body.sessionId) });
@@ -689,8 +719,8 @@ export function createApp(env: AppEnv = {}) {
       if (!verifyGitHubSignature(bodyText, githubWebhookSecret, c.req.raw.headers.get("x-hub-signature-256"))) {
         return c.json({ error: "invalid GitHub webhook signature" }, 401);
       }
-    } else {
-      const auth = await requireWriteAccess(c.req.raw.headers, "webhooks:write", undefined, requireApiKey, store, bootstrapToken);
+    } else if (!allowInsecureGitHubWebhooks) {
+      const auth = await requireWriteAccess(c.req.raw.headers, "webhooks:write", undefined, true, store, bootstrapToken);
       if (!auth.ok) {
         return c.json({ error: auth.error }, auth.status);
       }
@@ -808,6 +838,28 @@ function handoffResponse(c: any, result: ReturnType<typeof tryHandoff>, successS
     return c.json({ error: result.error }, 409);
   }
   return c.json({ handoff: result.handoff, session: result.session }, successStatus);
+}
+
+type RuntimeRecord = NonNullable<ReturnType<ControlPlaneStore["getRuntime"]>>;
+
+function redactForRuntime<T>(value: T, runtime: RuntimeRecord | undefined): T {
+  return redactSecrets(value, runtime?.environment.secretRefs ?? [], runtime ? runtimeSecretValues(runtime) : []);
+}
+
+function redactEventForRuntime<T extends { summary: string; detail?: string }>(event: T, runtime: RuntimeRecord | undefined): T {
+  const redacted = redactForRuntime(event, runtime);
+  if (typeof redacted.detail !== "string" || redacted.detail === event.detail) {
+    return redacted;
+  }
+  const summary = redacted.detail.trim().slice(0, 180);
+  return { ...redacted, summary: summary || redacted.summary };
+}
+
+function runtimeSecretValues(runtime: RuntimeRecord) {
+  const refs = new Set(runtime.environment.secretRefs.map((item) => item.toLowerCase()));
+  return Object.entries(runtime.environment.env)
+    .filter(([key]) => refs.has(key.toLowerCase()))
+    .map(([, value]) => value);
 }
 
 async function requireWriteAccess(

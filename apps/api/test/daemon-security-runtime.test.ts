@@ -72,6 +72,7 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
     const app = createApp({
       store: new MemoryStore(),
       now: () => new Date(now),
+      allowInsecureGitHubWebhooks: true,
       githubFetch: async () =>
         Response.json({
           title: "Fresh issue title",
@@ -114,7 +115,12 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
   it("runs a co-located shell runtime and stores a structured outcome", async () => {
     const dir = mkdtempSync(join(tmpdir(), "automomo-shell-runtime-"));
     try {
-      const app = createApp({ store: new MemoryStore(), now: () => new Date(now), allowLocalExecution: true });
+      const app = createApp({
+        store: new MemoryStore(),
+        now: () => new Date(now),
+        allowLocalExecution: true,
+        trustLocalExecutionWithoutAuth: true
+      });
       await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "local", workspaceRoot: dir }));
       await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Run shell" }));
       await app.request(
@@ -158,6 +164,7 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
       store,
       now: () => new Date(now),
       requireApiKey: true,
+      allowInsecureGitHubWebhooks: true,
       rateLimit: { limit: 1, windowMs: 60_000 }
     });
     await store.createApiKey({

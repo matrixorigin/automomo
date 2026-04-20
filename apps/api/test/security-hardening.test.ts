@@ -161,19 +161,279 @@ describe("secure API mutation controls", () => {
 
     expect(response.status).toBe(403);
   });
+
+  it("blocks unauthenticated local runtime setup and execution even when local execution is enabled without global API auth", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now), allowLocalExecution: true });
+    store.createApiKey({
+      id: "key_runtime",
+      name: "Runtime operator",
+      token: "runtime-token",
+      scopes: [{ actions: ["runtimes:write"] }, { codebaseId: "codebase_1", actions: ["sessions:write", "runtime:execute"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.saveRuntime({
+      id: "runtime_1",
+      name: "Shell",
+      mode: "local",
+      provider: "shell",
+      environment: {
+        command: [process.execPath, "-e", "console.log('{\"status\":\"success\",\"summary\":\"ok\",\"result\":{}}')"],
+        networkPolicy: "restricted",
+        env: {},
+        secretRefs: []
+      },
+      status: "online",
+      capacity: 1,
+      activeSessions: 0,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.saveSession({
+      id: "session_1",
+      codebaseId: "codebase_1",
+      runtimeId: "runtime_1",
+      status: "queued",
+      participants: [],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const localRuntime = await app.request(
+      "/api/runtimes",
+      json({
+        id: "runtime_attacker",
+        name: "Attacker shell",
+        mode: "local",
+        provider: "shell",
+        environment: { command: [process.execPath, "-e", "console.log('pwned')"], networkPolicy: "restricted", env: {}, secretRefs: [] }
+      })
+    );
+    const localSession = await app.request(
+      "/api/sessions",
+      json({ id: "session_attacker", codebaseId: "codebase_1", runtimeId: "runtime_1", status: "queued" })
+    );
+    const localRun = await app.request("/api/sessions/session_1/run-local", json({ provider: "shell" }));
+
+    expect(localRuntime.status).toBe(401);
+    expect(localSession.status).toBe(401);
+    expect(localRun.status).toBe(401);
+
+    const authorizedRun = await app.request("/api/sessions/session_1/run-local", json({ provider: "shell" }, auth("runtime-token")));
+    expect(authorizedRun.status).toBe(200);
+  });
+
+  it("redacts secret values from local, manual, and daemon persistence paths", async () => {
+    const secret = "super-secret-value";
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now), allowLocalExecution: true, requireApiKey: true });
+    store.createApiKey({
+      id: "key_admin",
+      name: "Admin",
+      token: "admin-token",
+      scopes: [{ actions: ["*"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.saveRuntime({
+      id: "runtime_local",
+      name: "Secret shell",
+      mode: "local",
+      provider: "shell",
+      environment: {
+        command: [
+          process.execPath,
+          "-e",
+          `console.log(JSON.stringify({status:'success',summary:'local ${secret}',result:{nested:{message:'token=${secret}'}}}))`
+        ],
+        networkPolicy: "restricted",
+        env: { PRIVATE_TOKEN: secret },
+        secretRefs: ["PRIVATE_TOKEN"]
+      },
+      status: "online",
+      capacity: 1,
+      activeSessions: 0,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.saveSession({
+      id: "session_local",
+      codebaseId: "codebase_1",
+      runtimeId: "runtime_local",
+      status: "queued",
+      participants: [],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const localRun = await app.request("/api/sessions/session_local/run-local", json({ provider: "shell" }, auth("admin-token")));
+    expect(localRun.status).toBe(200);
+    const localPayload = await localRun.json();
+    expect(JSON.stringify(localPayload)).not.toContain(secret);
+    expect(JSON.stringify(localPayload)).toContain("[REDACTED]");
+
+    store.saveSession({
+      id: "session_manual",
+      codebaseId: "codebase_1",
+      runtimeId: "runtime_local",
+      status: "queued",
+      participants: [],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    const manualOutcome = await app.request(
+      "/api/sessions/session_manual/outcome",
+      json(
+        {
+          status: "success",
+          summary: `manual ${secret}`,
+          result: { nested: { message: `value ${secret}` }, array: [`${secret}`] }
+        },
+        auth("admin-token")
+      )
+    );
+    expect(manualOutcome.status).toBe(201);
+    const manualPayload = await manualOutcome.json();
+    expect(JSON.stringify(manualPayload)).not.toContain(secret);
+
+    const registration = await registerDaemon(app, "runtime_daemon", undefined, auth("admin-token"), {
+      PRIVATE_TOKEN: secret
+    });
+    store.saveSession({
+      id: "session_daemon_events",
+      codebaseId: "codebase_1",
+      runtimeId: "runtime_daemon",
+      status: "queued",
+      participants: [],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    const lease = await app.request(
+      "/api/daemon/lease",
+      signedJson("/api/daemon/lease", { runtimeId: "runtime_daemon" }, registration, now, "nonce_secret_lease")
+    );
+    const leasePayload = (await lease.json()) as { lease: { leaseId: string } };
+    const eventUpload = await app.request(
+      "/api/daemon/events",
+      signedJson(
+        "/api/daemon/events",
+        {
+          runtimeId: "runtime_daemon",
+          leaseId: leasePayload.lease.leaseId,
+          sessionId: "session_daemon_events",
+          events: [
+            {
+              id: "event_daemon_secret",
+              sessionId: "session_daemon_events",
+              sequence: 0,
+              kind: "runtime",
+              summary: `daemon ${secret}`,
+              detail: `detail ${secret}`,
+              metadata: { nested: { message: `metadata ${secret}` } },
+              createdAt: now
+            }
+          ]
+        },
+        registration,
+        oneMinuteLater,
+        "nonce_secret_events"
+      )
+    );
+    expect(eventUpload.status).toBe(200);
+    const outcomeUpload = await app.request(
+      "/api/daemon/outcome",
+      signedJson(
+        "/api/daemon/outcome",
+        {
+          runtimeId: "runtime_daemon",
+          leaseId: leasePayload.lease.leaseId,
+          sessionId: "session_daemon_events",
+          outcome: {
+            id: "outcome_daemon_secret",
+            sessionId: "session_daemon_events",
+            status: "success",
+            summary: `daemon outcome ${secret}`,
+            result: { nested: { message: `outcome ${secret}` } },
+            eventsUploaded: 1,
+            createdAt: now
+          }
+        },
+        registration,
+        oneMinuteLater,
+        "nonce_secret_outcome"
+      )
+    );
+    expect(outcomeUpload.status).toBe(200);
+
+    store.saveSession({
+      id: "session_daemon_fail",
+      codebaseId: "codebase_1",
+      runtimeId: "runtime_daemon",
+      status: "queued",
+      participants: [],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    const failureLease = await app.request(
+      "/api/daemon/lease",
+      signedJson("/api/daemon/lease", { runtimeId: "runtime_daemon" }, registration, now, "nonce_failure_lease")
+    );
+    const failureLeasePayload = (await failureLease.json()) as { lease: { leaseId: string } };
+    const failureUpload = await app.request(
+      "/api/daemon/fail",
+      signedJson(
+        "/api/daemon/fail",
+        {
+          runtimeId: "runtime_daemon",
+          leaseId: failureLeasePayload.lease.leaseId,
+          sessionId: "session_daemon_fail",
+          reason: `failed ${secret}`,
+          detail: `detail ${secret}`,
+          metadata: { nested: { message: `metadata ${secret}` } }
+        },
+        registration,
+        oneMinuteLater,
+        "nonce_secret_fail"
+      )
+    );
+    expect(failureUpload.status).toBe(200);
+
+    expect(JSON.stringify(store.listSessionEvents("session_daemon_events"))).not.toContain(secret);
+    expect(JSON.stringify(store.getOutcome("outcome_daemon_secret"))).not.toContain(secret);
+    expect(JSON.stringify(store.listSessionEvents("session_daemon_fail"))).not.toContain(secret);
+  });
 });
 
 describe("daemon signed request hardening", () => {
   it("binds signed daemon calls to the body runtime and prevents cross-daemon lease renewal or failure", async () => {
     const store = new MemoryStore();
     const app = createApp({ store, now: () => new Date(now) });
+    store.createApiKey({
+      id: "key_runtime_admin",
+      name: "Runtime admin",
+      token: "runtime-admin-token",
+      scopes: [{ actions: ["daemons:register", "runtimes:write"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
     await app.request("/api/runtimes", json({ id: "runtime_1", name: "Runtime 1", mode: "remote_daemon", provider: "pi" }));
     await app.request("/api/runtimes", json({ id: "runtime_2", name: "Runtime 2", mode: "remote_daemon", provider: "pi" }));
     await app.request("/api/sessions", json({ id: "session_1", codebaseId: "codebase_1", runtimeId: "runtime_1" }));
     await app.request("/api/sessions", json({ id: "session_2", codebaseId: "codebase_1", runtimeId: "runtime_2" }));
 
-    const daemonOne = await registerDaemon(app, "runtime_1");
-    const daemonTwo = await registerDaemon(app, "runtime_1", "daemon_2");
+    const daemonOne = await registerDaemon(app, "runtime_1", undefined, auth("runtime-admin-token"));
+    const daemonTwo = await registerDaemon(app, "runtime_1", "daemon_2", auth("runtime-admin-token"));
 
     const forgedBody = { runtimeId: "runtime_2" };
     const forged = await app.request(
@@ -218,9 +478,18 @@ describe("daemon signed request hardening", () => {
     const store = new MemoryStore();
     let serverNow = now;
     const app = createApp({ store, now: () => new Date(serverNow) });
+    store.createApiKey({
+      id: "key_runtime_admin",
+      name: "Runtime admin",
+      token: "runtime-admin-token",
+      scopes: [{ actions: ["daemons:register", "runtimes:write"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
     await app.request("/api/runtimes", json({ id: "runtime_1", name: "Runtime", mode: "remote_daemon", provider: "pi" }));
     await app.request("/api/sessions", json({ id: "session_1", codebaseId: "codebase_1", runtimeId: "runtime_1" }));
-    const daemon = await registerDaemon(app, "runtime_1");
+    const daemon = await registerDaemon(app, "runtime_1", undefined, auth("runtime-admin-token"));
     const lease = await app.request(
       "/api/daemon/lease",
       signedJson("/api/daemon/lease", { runtimeId: "runtime_1" }, daemon, now, "nonce_lease")
@@ -254,6 +523,61 @@ describe("daemon signed request hardening", () => {
     const second = await app.request("/api/daemon/heartbeat", replayInit);
     expect(first.status).toBe(200);
     expect(second.status).toBe(401);
+  });
+
+  it("does not let daemons:register alone rebind or rewrite an existing runtime", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now), requireApiKey: true });
+    store.createApiKey({
+      id: "key_daemon_register",
+      name: "Daemon register only",
+      token: "daemon-register-token",
+      scopes: [{ actions: ["daemons:register"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.createApiKey({
+      id: "key_runtime_admin",
+      name: "Runtime admin",
+      token: "runtime-admin-token",
+      scopes: [{ actions: ["daemons:register", "runtimes:write"] }],
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    store.saveRuntime({
+      id: "runtime_existing",
+      name: "Existing runtime",
+      mode: "remote_daemon",
+      provider: "pi",
+      environment: { networkPolicy: "restricted", env: {}, secretRefs: [] },
+      status: "offline",
+      capacity: 3,
+      activeSessions: 0,
+      metadata: { owner: "trusted" },
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const scopedOnly = await app.request(
+      "/api/daemon/register",
+      json({ runtimeId: "runtime_existing", name: "Untrusted rewrite", provider: "shell" }, auth("daemon-register-token"))
+    );
+    expect(scopedOnly.status).toBe(403);
+    expect(store.getRuntime("runtime_existing")).toMatchObject({
+      name: "Existing runtime",
+      provider: "pi",
+      status: "offline",
+      capacity: 3,
+      metadata: { owner: "trusted" }
+    });
+
+    const runtimeAdmin = await app.request(
+      "/api/daemon/register",
+      json({ runtimeId: "runtime_existing", name: "Trusted daemon", provider: "pi" }, auth("runtime-admin-token"))
+    );
+    expect(runtimeAdmin.status).toBe(200);
   });
 });
 
@@ -304,11 +628,48 @@ describe("GitHub webhook trust and idempotent source upserts", () => {
     expect(payload.workItem.codebaseId).toBe("trusted_codebase");
   });
 
+  it("rejects unsigned GitHub webhooks when no secret or insecure local mode is configured", async () => {
+    const store = new MemoryStore();
+    const app = createApp({
+      store,
+      now: () => new Date(now),
+      githubFetch: async () =>
+        Response.json({
+          title: "Fresh issue",
+          body: "Fetched from GitHub",
+          labels: [],
+          html_url: "https://github.com/matrixorigin/automomo/issues/42",
+          node_id: "node_42",
+          state: "open",
+          user: { login: "octo" },
+          updated_at: now
+        })
+    });
+    store.saveCodebase({
+      id: "matrixorigin/automomo",
+      name: "automomo",
+      provider: "github",
+      sourceUrl: "https://github.com/matrixorigin/automomo",
+      status: "active",
+      metadata: {},
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const response = await app.request(
+      "/api/webhooks/github",
+      json({ repository: { owner: { login: "matrixorigin" }, name: "automomo" }, issue: { number: 42 } }, { "x-github-event": "issues" })
+    );
+
+    expect(response.status).toBe(401);
+  });
+
   it("does not create duplicate active sessions or regress active work status for repeated connector events", async () => {
     const store = new MemoryStore();
     const app = createApp({
       store,
       now: () => new Date(now),
+      allowInsecureGitHubWebhooks: true,
       githubFetch: async () =>
         Response.json({
           title: "Fresh issue",
@@ -373,7 +734,7 @@ describe("handoff and local runtime state machines", () => {
   it("routes local Pi execution through the Pi adapter instead of falling through to shell", async () => {
     const store = new MemoryStore();
     const app = withEnv({ AUTOMOMO_ENABLE_LOCAL_EXECUTION: "true" }, () =>
-      createApp({ store, now: () => new Date(now) })
+      createApp({ store, now: () => new Date(now), trustLocalExecutionWithoutAuth: true })
     );
     await app.request("/api/runtimes", json({ id: "runtime_1", name: "Pi Runtime", mode: "local", provider: "pi" }));
     await app.request("/api/sessions", json({ id: "session_1", codebaseId: "codebase_1", runtimeId: "runtime_1" }));
@@ -391,8 +752,26 @@ async function expectStatus(responseOrPromise: Response | Promise<Response>, sta
   expect(response.status).toBe(status);
 }
 
-async function registerDaemon(app: ReturnType<typeof createApp>, runtimeId: string, daemonId?: string) {
-  const res = await app.request("/api/daemon/register", json({ daemonId, runtimeId, name: `Daemon ${daemonId ?? runtimeId}`, provider: "pi" }));
+async function registerDaemon(
+  app: ReturnType<typeof createApp>,
+  runtimeId: string,
+  daemonId?: string,
+  headers: Record<string, string> = {},
+  env: Record<string, string> = {}
+) {
+  const res = await app.request(
+    "/api/daemon/register",
+    json(
+      {
+        daemonId,
+        runtimeId,
+        name: `Daemon ${daemonId ?? runtimeId}`,
+        provider: "pi",
+        environment: { networkPolicy: "restricted", env, secretRefs: Object.keys(env) }
+      },
+      headers
+    )
+  );
   const payload = (await res.json()) as { daemon: { id: string; runtimeId: string }; secret: string };
   return payload;
 }
