@@ -54,6 +54,9 @@ importers:
 
   apps/daemon:
     dependencies:
+      '@automomo/api':
+        specifier: workspace:*
+        version: link:../api
       '@automomo/pi-runtime':
         specifier: workspace:*
         version: link:../../packages/pi-runtime

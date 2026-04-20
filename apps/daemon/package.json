@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@automomo/api": "workspace:*",
     "@automomo/pi-runtime": "workspace:*",
     "@automomo/protocol": "workspace:*"
   },
