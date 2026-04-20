@@ -16,13 +16,14 @@ export function upsertWorkItemFromSource(input: {
     .find((item) => item.connector?.type === input.request.connector.type && connectorMatches(item.connector, input.request.connector));
   const idFactory = input.idFactory ?? defaultId;
   const created = existing === undefined;
+  const status = nextStatus(existing?.status, input.request.status);
   const workItem = input.store.saveWorkItem({
     id: existing?.id ?? idFactory("work"),
     codebaseId: input.request.codebaseId,
     title: input.request.title,
     body: input.request.body,
     source: input.request.source,
-    status: existing?.status === "completed" ? existing.status : input.request.status,
+    status,
     priority: input.request.priority,
     labels: input.request.labels,
     connector: input.request.connector,
@@ -46,6 +47,16 @@ export function upsertWorkItemFromSource(input: {
     created,
     sessionStart: sessionStart?.session ? sessionStart : undefined
   });
+}
+
+function nextStatus(existing: WorkItemUpsertRequest["status"] | undefined, incoming: WorkItemUpsertRequest["status"]) {
+  if (!existing) {
+    return incoming;
+  }
+  if (["ready", "running", "needs_human", "completed"].includes(existing) && incoming === "open") {
+    return existing;
+  }
+  return existing === "completed" ? existing : incoming;
 }
 
 function connectorMatches(left: { id?: string; url?: string }, right: { id?: string; url?: string }) {

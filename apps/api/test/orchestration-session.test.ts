@@ -137,6 +137,7 @@ describe("orchestration evaluation and session detail", () => {
     );
     await app.request("/api/sessions/session_1/handoff", json({ action: "request", reason: "Need input" }));
     await app.request("/api/sessions/session_1/handoff", json({ action: "claim", reason: "Taking over", claimedBy: "randomradio" }));
+    await app.request("/api/sessions/session_1/handoff", json({ action: "respond", note: "Ready to continue", claimedBy: "randomradio" }));
     await app.request("/api/sessions/session_1/resume", json({ note: "Continue" }));
     await app.request(
       "/api/sessions/session_1/outcome",
@@ -157,7 +158,7 @@ describe("orchestration evaluation and session detail", () => {
 
     expect(detail.session).toMatchObject({ status: "completed", outcomeId: "outcome_1" });
     expect(detail.events.map((event) => event.kind)).toContain("handoff");
-    expect(detail.handoffs.map((handoff) => handoff.status)).toEqual(["requested", "claimed", "resumed"]);
+    expect(detail.handoffs.map((handoff) => handoff.status)).toEqual(["requested", "claimed", "responded", "resumed"]);
     expect(detail.outcome?.id).toBe("outcome_1");
     expect(detail.workItem?.id).toBe("work_1");
     expect(detail.agent?.id).toBe("agent_1");

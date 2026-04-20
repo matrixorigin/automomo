@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   composePiPrompt,
+  createPiSdkSessionFactory,
   createMetadataOnlyRunner,
   createPiSdkRunner,
   decodePiOutcome,
@@ -125,5 +126,46 @@ describe("Pi runtime SDK adapter", () => {
     expect(calls[0]).toContain("Fix runtime lease");
     expect(result.events.map((event) => event.kind)).toContain("text");
     expect(result.outcome).toMatchObject({ status: "needs_human", summary: "Need input" });
+  });
+
+  it("adapts the default Pi createAgentSession SDK path without making a live model call in tests", async () => {
+    const prompts: string[] = [];
+    const factory = createPiSdkSessionFactory({
+      createAgentSession: async (options) => {
+        expect(options?.cwd).toBe("/tmp/work");
+        expect(options?.thinkingLevel).toBe("high");
+        return {
+          session: {
+            subscribe: (listener: (event: unknown) => void) => {
+              listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "working" } });
+              return () => undefined;
+            },
+            prompt: async (prompt: string) => {
+              prompts.push(prompt);
+            },
+            agent: {
+              state: {
+                messages: [
+                  {
+                    role: "assistant",
+                    content: [{ type: "text", text: "{\"status\":\"success\",\"summary\":\"SDK done\",\"result\":{\"ok\":true}}" }]
+                  }
+                ]
+              }
+            }
+          }
+        };
+      }
+    });
+
+    const result = await factory({
+      prompt: "Run the session",
+      context,
+      config: { mode: "sdk", thinkingLevel: "high", cwd: "/tmp/work", toolsMode: "readonly", skills: [], contextFiles: [], outcomeSchema: {} }
+    });
+
+    expect(prompts).toEqual(["Run the session"]);
+    expect(result.events).toContainEqual(expect.objectContaining({ type: "message_update" }));
+    expect(result.finalText).toContain("SDK done");
   });
 });

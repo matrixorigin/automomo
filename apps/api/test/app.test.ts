@@ -131,7 +131,7 @@ describe("automomo API", () => {
       }, daemon, now)
     );
 
-    expect(badUpload.status).toBe(409);
+    expect(badUpload.status).toBe(403);
   });
 
   it("updates runtime status from daemon heartbeats", async () => {
@@ -336,12 +336,14 @@ async function registerDaemon(app: ReturnType<typeof createApp>, runtimeId: stri
 function signedJson(path: string, body: unknown, registration: { daemon: { id: string; runtimeId: string }; secret: string }, timestamp: string) {
   const bodyText = JSON.stringify(body);
   const bodyHash = createHash("sha256").update(bodyText).digest("hex");
-  const canonical = ["POST", path, timestamp, bodyHash, registration.daemon.id, registration.daemon.runtimeId].join("\n");
+  const nonce = createHash("sha256").update(`${path}:${timestamp}:${bodyText}`).digest("hex").slice(0, 16);
+  const canonical = ["POST", path, timestamp, bodyHash, registration.daemon.id, registration.daemon.runtimeId, nonce].join("\n");
   const signature = createHmac("sha256", registration.secret).update(canonical).digest("hex");
   return json(body, {
     "x-automomo-daemon-id": registration.daemon.id,
     "x-automomo-runtime-id": registration.daemon.runtimeId,
     "x-automomo-timestamp": timestamp,
+    "x-automomo-nonce": nonce,
     "x-automomo-signature": signature
   });
 }

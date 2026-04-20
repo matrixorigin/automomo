@@ -33,7 +33,7 @@ describe("local machine runtime end-to-end", () => {
         const url = new URL(String(input));
         return app.request(`${url.pathname}${url.search}`, init);
       };
-      const api = new DaemonApiClient({ baseUrl: "http://automomo.test", fetchImpl: apiFetch });
+      const api = new DaemonApiClient({ baseUrl: "http://automomo.test", fetchImpl: apiFetch, now: () => new Date(clock) });
 
       try {
         await app.request(

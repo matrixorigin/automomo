@@ -352,6 +352,7 @@ export const DaemonSignedRequestHeadersSchema = z.object({
   daemonId: IdSchema,
   runtimeId: IdSchema,
   timestamp: ISODateString,
+  nonce: IdSchema,
   signature: z.string().trim().min(1),
   signatureVersion: SignatureVersionSchema.default("hmac-sha256-v1")
 });

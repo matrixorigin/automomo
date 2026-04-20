@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@automomo/pi-runtime':
+        specifier: workspace:*
+        version: link:../../packages/pi-runtime
       '@automomo/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

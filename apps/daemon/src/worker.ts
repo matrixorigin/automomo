@@ -23,17 +23,43 @@ export class DaemonWorker {
 
   async pollOnce() {
     const runtime = this.runtime ?? (await this.register());
+    await this.options.client.heartbeat({
+      runtimeId: runtime.id,
+      status: "online",
+      activeSessions: 0,
+      capacity: runtime.capacity,
+      observedAt: new Date().toISOString()
+    });
     const lease = await this.options.client.pollLease(runtime.id);
     if (!lease) {
       return { status: "idle" as const };
     }
+    await this.options.client.renewLease({ runtimeId: runtime.id, leaseId: lease.leaseId });
 
-    const result = await this.runtimeAdapter.runSession({
-      session: lease.session,
-      workItem: lease.workItem,
-      agent: lease.agent,
-      runtime: lease.runtime
-    });
+    let result;
+    try {
+      result = await this.runtimeAdapter.runSession({
+        session: lease.session,
+        workItem: lease.workItem,
+        agent: lease.agent,
+        runtime: lease.runtime
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "runtime adapter failed";
+      await this.options.client.failLease({
+        runtimeId: runtime.id,
+        leaseId: lease.leaseId,
+        sessionId: lease.session.id,
+        reason,
+        detail: reason
+      });
+      return {
+        status: "failed" as const,
+        leaseId: lease.leaseId,
+        sessionId: lease.session.id,
+        reason
+      };
+    }
 
     await this.options.client.uploadEvents({
       runtimeId: runtime.id,

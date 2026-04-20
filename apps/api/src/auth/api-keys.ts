@@ -11,7 +11,7 @@ export function tokenFromAuthorization(value: string | undefined | null) {
 export function apiKeyCan(apiKey: ApiKey, action: string, codebaseId?: string) {
   return apiKey.scopes.some((scope) => {
     const actionMatches = scope.actions.includes(action) || scope.actions.includes("*");
-    const codebaseMatches = !scope.codebaseId || !codebaseId || scope.codebaseId === codebaseId;
+    const codebaseMatches = codebaseId ? !scope.codebaseId || scope.codebaseId === codebaseId : !scope.codebaseId;
     return actionMatches && codebaseMatches;
   });
 }

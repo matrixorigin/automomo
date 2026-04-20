@@ -33,6 +33,14 @@ export interface PiRuntimeAdapterOptions {
   sessionFactory?: PiSessionFactory;
 }
 
+export type CreateAgentSessionLike = (options?: Record<string, unknown>) => Promise<{
+  session: {
+    subscribe?: (listener: (event: unknown) => void) => () => void;
+    prompt: (prompt: string) => Promise<void>;
+    agent?: { state?: { messages?: unknown[] } };
+  };
+}>;
+
 export class PiRuntimeAdapter {
   private readonly runner: PiRuntimeRunner;
 
@@ -319,17 +327,58 @@ async function withTimeout(
   }
 }
 
+export function createPiSdkSessionFactory(options: { createAgentSession: CreateAgentSessionLike }): PiSessionFactory {
+  return async ({ prompt, context, config }) => {
+    const events: unknown[] = [];
+    const cwd = config.cwd ?? context.runtime.environment.workspaceRoot;
+    const { session } = await options.createAgentSession({
+      cwd,
+      thinkingLevel: config.thinkingLevel
+    });
+    const unsubscribe = session.subscribe?.((event) => {
+      events.push(event);
+    });
+    try {
+      await session.prompt(prompt);
+    } finally {
+      unsubscribe?.();
+    }
+    return {
+      events,
+      finalText: finalTextFromMessages(session.agent?.state?.messages) ?? ""
+    };
+  };
+}
+
 function createDefaultPiSessionFactory(): PiSessionFactory {
-  return async () => {
+  return async (input) => {
     const mod = await import("@mariozechner/pi-coding-agent");
     const createAgentSession = (mod as { createAgentSession?: unknown }).createAgentSession;
     if (typeof createAgentSession !== "function") {
       throw new Error("Pi Mono SDK createAgentSession is unavailable");
     }
-    throw new Error("Pi Mono SDK execution requires an injected sessionFactory in this automomo build");
+    return createPiSdkSessionFactory({ createAgentSession: createAgentSession as CreateAgentSessionLike })(input);
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function finalTextFromMessages(messages: unknown[] | undefined) {
+  const lastAssistant = [...(messages ?? [])].reverse().find((message) => isRecord(message) && message.role === "assistant");
+  if (!isRecord(lastAssistant)) {
+    return undefined;
+  }
+  const content = lastAssistant.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => (isRecord(item) && typeof item.text === "string" ? item.text : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  return undefined;
 }

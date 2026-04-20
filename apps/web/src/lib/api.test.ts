@@ -67,4 +67,43 @@ describe("automomo web API client", () => {
     await expect(client.listRuntimes()).resolves.toEqual([]);
     await expect(client.listSessions({ status: "queued" })).resolves.toMatchObject({ page: { total: 0 } });
   });
+
+  it("sends write payloads as JSON to the API", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createAutomomoApiClient({
+      baseUrl: "http://automomo.test",
+      fetchImpl: async (input, init) => {
+        requests.push({ url: String(input), init });
+        if (String(input).endsWith("/api/agents")) {
+          return Response.json({
+            agent: {
+              id: "agent_1",
+              name: "Ralph",
+              instructions: "",
+              skills: [],
+              tools: [],
+              maxConcurrency: 1,
+              metadata: {},
+              createdAt: now,
+              updatedAt: now
+            }
+          });
+        }
+        return Response.json({});
+      }
+    });
+
+    await client.createAgent({ name: "Ralph" });
+
+    expect(requests).toEqual([
+      {
+        url: "http://automomo.test/api/agents",
+        init: expect.objectContaining({
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "Ralph" })
+        })
+      }
+    ]);
+  });
 });

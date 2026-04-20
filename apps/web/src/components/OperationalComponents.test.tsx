@@ -3,11 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AgentEditor } from "./AgentEditor";
 import { EmptyState } from "./EmptyState";
+import { buildHandoffPayload, HandoffControls } from "./HandoffControls";
 import { RuntimeEditor } from "./RuntimeEditor";
 import { RuntimeHealthBadge } from "./RuntimeHealthBadge";
-import { RuleEditor } from "./RuleEditor";
+import { buildRulePayload, RuleEditor } from "./RuleEditor";
 import { SessionDetailPanel } from "./SessionDetailPanel";
 import { StatusStrip } from "./StatusStrip";
+import { buildAgentPayload } from "./AgentEditor";
+import { buildRuntimePayload } from "./RuntimeEditor";
 
 const now = "2026-04-20T08:00:00.000Z";
 
@@ -39,7 +42,11 @@ describe("operational web components", () => {
   it("renders editor workflows and runtime health badges", () => {
     const html = renderToStaticMarkup(
       <>
-        <RuleEditor agents={[{ id: "agent_1", name: "Ralph" }]} runtimes={[{ id: "runtime_1", name: "Local Pi" }]} />
+        <RuleEditor
+          codebases={[{ id: "codebase_1", name: "Automomo" }]}
+          agents={[{ id: "agent_1", name: "Ralph" }]}
+          runtimes={[{ id: "runtime_1", name: "Local Pi" }]}
+        />
         <AgentEditor runtimes={[{ id: "runtime_1", name: "Local Pi" }]} />
         <RuntimeEditor />
         <RuntimeHealthBadge status="online" />
@@ -52,6 +59,75 @@ describe("operational web components", () => {
     expect(html).toContain("Runtime name");
     expect(html).toContain("online");
     expect(html).toContain("unhealthy");
+  });
+
+  it("renders JSON-backed mutation forms and builds API payloads from form data", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <RuleEditor
+          codebases={[{ id: "codebase_1", name: "Automomo" }]}
+          agents={[{ id: "agent_1", name: "Ralph" }]}
+          runtimes={[{ id: "runtime_1", name: "Local Pi" }]}
+        />
+        <AgentEditor runtimes={[{ id: "runtime_1", name: "Local Pi" }]} />
+        <RuntimeEditor />
+        <HandoffControls sessionId="session_1" />
+      </>
+    );
+    expect(html).toContain('data-json-endpoint="/api/orchestration-rules"');
+    expect(html).toContain('data-json-endpoint="/api/agents"');
+    expect(html).toContain('data-json-endpoint="/api/runtimes"');
+    expect(html).toContain('data-json-endpoint="/api/sessions/session_1/handoff"');
+    expect(html).not.toContain('method="post"');
+
+    expect(
+      buildAgentPayload(
+        formData({
+          name: "Ralph",
+          model: "gpt-5.4",
+          instructions: "Work carefully.",
+          skills: "runtime, testing",
+          tools: "shell, git",
+          defaultRuntimeId: "runtime_1",
+          maxConcurrency: "2"
+        })
+      )
+    ).toMatchObject({ skills: ["runtime", "testing"], tools: ["shell", "git"], maxConcurrency: 2 });
+    expect(
+      buildRulePayload(
+        formData({
+          codebaseId: "codebase_1",
+          name: "Runtime rule",
+          trigger: "webhook",
+          labels: "runtime,ui",
+          priority: "high",
+          agentId: "agent_1",
+          runtimeId: "runtime_1",
+          enabled: "on",
+          humanApproval: "on_risk"
+        })
+      )
+    ).toMatchObject({ codebaseId: "codebase_1", match: { labels: ["runtime", "ui"], priority: ["high"] } });
+    expect(
+      buildRuntimePayload(
+        formData({
+          name: "Local",
+          mode: "local",
+          provider: "docker",
+          workspaceRoot: "/tmp/work",
+          image: "node:22",
+          command: "pnpm test",
+          capacity: "3",
+          networkPolicy: "disabled",
+          secretRefs: "GITHUB_TOKEN,OPENAI_API_KEY"
+        })
+      )
+    ).toMatchObject({
+      provider: "docker",
+      capacity: 3,
+      environment: { command: ["pnpm", "test"], secretRefs: ["GITHUB_TOKEN", "OPENAI_API_KEY"] }
+    });
+    expect(buildHandoffPayload(formData({ action: "claim", claimedBy: "mo" }))).toMatchObject({ action: "claim", claimedBy: "mo" });
   });
 
   it("renders session detail with timeline, handoffs, outcome, and controls", () => {
@@ -102,3 +178,11 @@ describe("operational web components", () => {
     expect(html).toContain("Resume");
   });
 });
+
+function formData(values: Record<string, string>) {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(values)) {
+    data.set(key, value);
+  }
+  return data;
+}

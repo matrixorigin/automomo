@@ -1,10 +1,23 @@
 "use client";
 
 import React from "react";
+import { commaList, numberValue, optionalString, submitJsonForm } from "./jsonSubmit";
+
+export function buildAgentPayload(formData: FormData) {
+  return compact({
+    name: optionalString(formData.get("name")),
+    model: optionalString(formData.get("model")),
+    instructions: optionalString(formData.get("instructions")) ?? "",
+    skills: commaList(formData.get("skills")),
+    tools: commaList(formData.get("tools")),
+    defaultRuntimeId: optionalString(formData.get("defaultRuntimeId")),
+    maxConcurrency: numberValue(formData.get("maxConcurrency"), 1)
+  });
+}
 
 export function AgentEditor({ runtimes }: { runtimes: { id: string; name: string }[] }) {
   return (
-    <form className="editor-panel" action="/api/agents" method="post">
+    <form className="editor-panel" data-json-endpoint="/api/agents" onSubmit={submitJsonForm("/api/agents", buildAgentPayload)}>
       <label>
         <span>Agent name</span>
         <input name="name" required />
@@ -43,4 +56,8 @@ export function AgentEditor({ runtimes }: { runtimes: { id: string; name: string
       <button type="submit">Save agent</button>
     </form>
   );
+}
+
+function compact<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as Partial<T>;
 }

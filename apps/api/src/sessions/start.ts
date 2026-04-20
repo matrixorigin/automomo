@@ -17,6 +17,12 @@ export function startSessionFromWorkItem(input: {
   if (!evaluation.matched) {
     return SessionStartResultSchema.parse({ evaluation });
   }
+  const existingSession = input.store
+    .listSessions()
+    .find((session) => session.workItemId === input.workItem.id && !["completed", "failed", "cancelled"].includes(session.status));
+  if (existingSession) {
+    return SessionStartResultSchema.parse({ evaluation, session: existingSession, workItem: input.workItem });
+  }
 
   const agent = evaluation.agentId ? input.store.getAgent(evaluation.agentId) : undefined;
   const runtimeId = evaluation.runtimeId ?? agent?.defaultRuntimeId;

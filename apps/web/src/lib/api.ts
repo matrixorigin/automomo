@@ -28,6 +28,18 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     return response.json();
   }
 
+  async function post(path: string, body: Record<string, unknown>) {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      throw new Error(`automomo API ${path} failed with ${response.status}`);
+    }
+    return response.json();
+  }
+
   return {
     async getOverview() {
       return OverviewSchema.parse(await get("/api/overview"));
@@ -56,6 +68,18 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     async listRuntimes() {
       const payload = (await get("/api/runtimes")) as { runtimes: unknown[] };
       return payload.runtimes.map((item) => RuntimeSchema.parse(item));
+    },
+    async createAgent(body: Record<string, unknown>) {
+      const payload = (await post("/api/agents", body)) as { agent: unknown };
+      return AgentSchema.parse(payload.agent);
+    },
+    async createRuntime(body: Record<string, unknown>) {
+      const payload = (await post("/api/runtimes", body)) as { runtime: unknown };
+      return RuntimeSchema.parse(payload.runtime);
+    },
+    async createOrchestrationRule(body: Record<string, unknown>) {
+      const payload = (await post("/api/orchestration-rules", body)) as { orchestrationRule: unknown };
+      return OrchestrationRuleSchema.parse(payload.orchestrationRule);
     }
   };
 }

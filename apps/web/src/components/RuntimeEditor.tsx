@@ -1,10 +1,28 @@
 "use client";
 
 import React from "react";
+import { commaList, commandList, numberValue, optionalString, submitJsonForm } from "./jsonSubmit";
+
+export function buildRuntimePayload(formData: FormData) {
+  return compact({
+    name: optionalString(formData.get("name")),
+    mode: optionalString(formData.get("mode")) ?? "local",
+    provider: optionalString(formData.get("provider")) ?? "pi",
+    capacity: numberValue(formData.get("capacity"), 1),
+    environment: compact({
+      workspaceRoot: optionalString(formData.get("workspaceRoot")),
+      image: optionalString(formData.get("image")),
+      command: commandList(formData.get("command")),
+      networkPolicy: optionalString(formData.get("networkPolicy")) ?? "restricted",
+      env: {},
+      secretRefs: commaList(formData.get("secretRefs"))
+    })
+  });
+}
 
 export function RuntimeEditor() {
   return (
-    <form className="editor-panel" action="/api/runtimes" method="post">
+    <form className="editor-panel" data-json-endpoint="/api/runtimes" onSubmit={submitJsonForm("/api/runtimes", buildRuntimePayload)}>
       <label>
         <span>Runtime name</span>
         <input name="name" required />
@@ -57,4 +75,10 @@ export function RuntimeEditor() {
       <button type="submit">Save runtime</button>
     </form>
   );
+}
+
+function compact<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined && (!Array.isArray(item) || item.length > 0))
+  ) as Partial<T>;
 }

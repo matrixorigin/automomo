@@ -92,10 +92,11 @@ export interface ControlPlaneStore {
   saveDaemon(daemon: Daemon & { secret: string }): Daemon & { secret: string };
   getDaemon(id: string): (Daemon & { secret: string }) | undefined;
   listDaemons(): Daemon[];
+  recordDaemonNonce(input: { daemonId: string; nonce: string; expiresAt: string }): boolean;
   createLease(lease: RuntimeLease): RuntimeLease;
   findLease(id: string): RuntimeLease | undefined;
-  renewLease(input: { leaseId: string; runtimeId: string; now: string }): RuntimeLease | undefined;
-  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }): RuntimeLease | undefined;
+  renewLease(input: { leaseId: string; runtimeId: string; now: string; daemonId?: string }): RuntimeLease | undefined;
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }): RuntimeLease | undefined;
   completeLease(input: { leaseId: string; now: string }): RuntimeLease | undefined;
   reclaimExpiredLeases(now: string): RuntimeLease[];
   assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }): RuntimeLease;
@@ -117,6 +118,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly outcomes = new Map<string, Outcome>();
   readonly handoffs = new Map<string, HumanHandoff[]>();
   readonly daemons = new Map<string, Daemon & { secret: string }>();
+  readonly daemonNonces = new Map<string, string>();
   readonly leases = new Map<string, RuntimeLease>();
   readonly apiKeys = new Map<string, ApiKey>();
   readonly auditEvents: AuditEvent[] = [];
@@ -288,6 +290,15 @@ export class MemoryStore implements ControlPlaneStore {
     return [...this.daemons.values()].map(({ secret: _secret, ...daemon }) => daemon);
   }
 
+  recordDaemonNonce(input: { daemonId: string; nonce: string; expiresAt: string }) {
+    const key = `${input.daemonId}:${input.nonce}`;
+    if (this.daemonNonces.has(key)) {
+      return false;
+    }
+    this.daemonNonces.set(key, input.expiresAt);
+    return true;
+  }
+
   createLease(lease: RuntimeLease) {
     this.leases.set(lease.id, lease);
     if (!lease.completedAt && !lease.failedAt) {
@@ -305,9 +316,9 @@ export class MemoryStore implements ControlPlaneStore {
     return this.leases.get(id);
   }
 
-  renewLease(input: { leaseId: string; runtimeId: string; now: string }) {
+  renewLease(input: { leaseId: string; runtimeId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
-    if (!lease || lease.runtimeId !== input.runtimeId) {
+    if (!lease || lease.runtimeId !== input.runtimeId || (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId)) {
       return undefined;
     }
     const renewed = { ...lease, renewedAt: input.now, expiresAt: new Date(Date.parse(input.now) + 5 * 60 * 1000).toISOString() };
@@ -315,9 +326,14 @@ export class MemoryStore implements ControlPlaneStore {
     return renewed;
   }
 
-  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
-    if (!lease || lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
+    if (
+      !lease ||
+      lease.runtimeId !== input.runtimeId ||
+      lease.sessionId !== input.sessionId ||
+      (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId)
+    ) {
       return undefined;
     }
     const failed = { ...lease, failedAt: input.now };
@@ -934,6 +950,27 @@ export class SQLiteStore implements ControlPlaneStore {
       });
   }
 
+  recordDaemonNonce(input: { daemonId: string; nonce: string; expiresAt: string }) {
+    const existing = this.db
+      .select()
+      .from(schema.daemonNonces)
+      .where(eq(schema.daemonNonces.daemonId, input.daemonId))
+      .all()
+      .some((row) => row.nonce === input.nonce);
+    if (existing) {
+      return false;
+    }
+    this.db
+      .insert(schema.daemonNonces)
+      .values({
+        daemonId: input.daemonId,
+        nonce: input.nonce,
+        expiresAt: input.expiresAt
+      })
+      .run();
+    return true;
+  }
+
   createLease(lease: RuntimeLease) {
     this.db
       .insert(schema.runtimeLeases)
@@ -978,18 +1015,23 @@ export class SQLiteStore implements ControlPlaneStore {
     return row ? rowToRuntimeLease(row) : undefined;
   }
 
-  renewLease(input: { leaseId: string; runtimeId: string; now: string }) {
+  renewLease(input: { leaseId: string; runtimeId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
-    if (!lease || lease.runtimeId !== input.runtimeId) {
+    if (!lease || lease.runtimeId !== input.runtimeId || (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId)) {
       return undefined;
     }
     const renewed = { ...lease, renewedAt: input.now, expiresAt: new Date(Date.parse(input.now) + 5 * 60 * 1000).toISOString() };
     return this.createLease(renewed);
   }
 
-  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
-    if (!lease || lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
+    if (
+      !lease ||
+      lease.runtimeId !== input.runtimeId ||
+      lease.sessionId !== input.sessionId ||
+      (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId)
+    ) {
       return undefined;
     }
     const failed = this.createLease({ ...lease, failedAt: input.now });
@@ -1264,6 +1306,13 @@ export class SQLiteStore implements ControlPlaneStore {
         failed_at TEXT,
         created_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS daemon_nonces (
+        daemon_id TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS daemon_nonces_identity_idx ON daemon_nonces (daemon_id, nonce);
 
       CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,

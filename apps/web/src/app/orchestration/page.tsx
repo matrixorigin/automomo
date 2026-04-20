@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function OrchestrationPage() {
   const api = getApiClient();
-  const [overview, agents, orchestrationRules, runtimes] = await Promise.all([
+  const [overview, codebases, agents, orchestrationRules, runtimes] = await Promise.all([
     api.getOverview(),
+    api.listCodebases(),
     api.listAgents(),
     api.listOrchestrationRules(),
     api.listRuntimes()
@@ -19,7 +20,7 @@ export default async function OrchestrationPage() {
     <AppShell active="Orchestration" overview={overview}>
       <WorkspaceHeader section="Orchestration" title="Routing rules" action="New rule" />
       <section className="schedule">
-        <RuleEditor agents={agents} runtimes={runtimes} />
+        <RuleEditor codebases={codebases} agents={agents} runtimes={runtimes} />
       </section>
       <DataRows title="Active rules" count={orchestrationRules.length}>
         {orchestrationRules.length === 0 ? <EmptyState title="No routing rules" body="Create a rule to send work to an agent runtime." /> : null}

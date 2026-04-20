@@ -11,6 +11,13 @@ const statusByAction: Record<HandoffAction["action"], HumanHandoff["status"]> = 
   complete: "completed"
 };
 
+export class HandoffTransitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HandoffTransitionError";
+  }
+}
+
 export function applyHandoffAction(input: {
   store: ControlPlaneStore;
   sessionId: string;
@@ -23,6 +30,7 @@ export function applyHandoffAction(input: {
     return undefined;
   }
   const idFactory = input.idFactory ?? defaultId;
+  assertTransition(input.store.listHandoffs(input.sessionId), input.action);
   const status = statusByAction[input.action.action];
   const handoff = input.store.saveHandoff({
     id: idFactory("handoff"),
@@ -64,6 +72,47 @@ export function applyHandoffAction(input: {
   });
 
   return { handoff, session: input.store.getSession(input.sessionId), events };
+}
+
+function assertTransition(handoffs: HumanHandoff[], action: HandoffAction) {
+  const latest = handoffs.at(-1);
+  switch (action.action) {
+    case "request":
+      if (latest && !["resumed", "rejected", "completed"].includes(latest.status)) {
+        throw new HandoffTransitionError(`cannot request handoff after ${latest.status}`);
+      }
+      return;
+    case "claim":
+      if (latest?.status !== "requested") {
+        throw new HandoffTransitionError("handoff must be requested before claim");
+      }
+      return;
+    case "respond":
+      if (latest?.status !== "claimed") {
+        throw new HandoffTransitionError("handoff must be claimed before response");
+      }
+      return;
+    case "resume":
+      if (latest?.status !== "responded" && latest?.status !== "approved") {
+        throw new HandoffTransitionError("handoff must be responded or approved before resume");
+      }
+      return;
+    case "approve":
+      if (!latest || !["requested", "claimed", "responded"].includes(latest.status)) {
+        throw new HandoffTransitionError("handoff must be active before approval");
+      }
+      return;
+    case "reject":
+      if (!latest || !["requested", "claimed", "responded"].includes(latest.status)) {
+        throw new HandoffTransitionError("handoff must be active before rejection");
+      }
+      return;
+    case "complete":
+      if (latest?.status !== "resumed" && latest?.status !== "approved") {
+        throw new HandoffTransitionError("handoff must be resumed or approved before completion");
+      }
+      return;
+  }
 }
 
 function defaultReason(action: HandoffAction["action"]) {

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import {
   HandoffActionSchema,
@@ -23,13 +24,13 @@ import {
 } from "@automomo/protocol";
 import { apiKeyCan, tokenFromAuthorization } from "./auth/api-keys";
 import { GitHubClient, normalizeGitHubWorkItem } from "./connectors/github/client";
-import { signDaemonRequest, verifyDaemonRequest } from "./daemon/auth";
+import { verifyDaemonRequest } from "./daemon/auth";
 import { parseSessionListQuery, parseWorkItemListQuery } from "./filters";
 import { buildOverview } from "./overview";
 import { redactSecrets } from "./security/redact";
 import { InMemoryRateLimiter, RateLimitOptions } from "./security/rate-limit";
 import { executeLocalRuntime } from "./runtime/execute";
-import { applyHandoffAction } from "./sessions/handoff";
+import { applyHandoffAction, HandoffTransitionError } from "./sessions/handoff";
 import { startSessionFromWorkItem } from "./sessions/start";
 import { ControlPlaneStore, LeaseError, createDefaultStore } from "./store";
 
@@ -38,6 +39,9 @@ export interface AppEnv {
   now?: () => Date;
   githubFetch?: typeof fetch;
   requireApiKey?: boolean;
+  bootstrapToken?: string;
+  githubWebhookSecret?: string;
+  allowLocalExecution?: boolean;
   rateLimit?: RateLimitOptions;
 }
 
@@ -101,6 +105,9 @@ export function createApp(env: AppEnv = {}) {
   const store = env.store ?? createDefaultStore();
   const now = () => (env.now ?? (() => new Date()))().toISOString();
   const requireApiKey = env.requireApiKey ?? process.env.AUTOMOMO_REQUIRE_API_KEY === "true";
+  const bootstrapToken = env.bootstrapToken ?? process.env.AUTOMOMO_BOOTSTRAP_TOKEN;
+  const githubWebhookSecret = env.githubWebhookSecret ?? process.env.AUTOMOMO_GITHUB_WEBHOOK_SECRET;
+  const allowLocalExecution = env.allowLocalExecution ?? process.env.AUTOMOMO_ENABLE_LOCAL_EXECUTION === "true";
   const rateLimiter = new InMemoryRateLimiter(env.rateLimit ?? { limit: 120, windowMs: 60_000 });
   const github = new GitHubClient({ fetchImpl: env.githubFetch });
 
@@ -111,6 +118,10 @@ export function createApp(env: AppEnv = {}) {
   app.get("/api/codebases", (c) => c.json({ codebases: store.listCodebases() }));
   app.post("/api/codebases", async (c) => {
     const body = await parseJson(c.req, createCodebaseBody);
+    const auth = await requireWriteAccess(c.req.raw.headers, "codebases:write", body.id, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const codebase = store.saveCodebase({
       id: body.id ?? randomId("codebase"),
@@ -134,7 +145,7 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/work-items", async (c) => {
     const body = await parseJson(c.req, createWorkItemBody);
-    const auth = await requireWriteAccess(c.req.raw.headers, "work_items:write", body.codebaseId, requireApiKey, store);
+    const auth = await requireWriteAccess(c.req.raw.headers, "work_items:write", body.codebaseId, requireApiKey, store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
@@ -179,6 +190,10 @@ export function createApp(env: AppEnv = {}) {
     if (!item) {
       return c.json({ error: "work item not found" }, 404);
     }
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", item.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const body = await parseJson(c.req, z.object({ trigger: z.enum(["manual", "webhook", "schedule", "sync", "api"]).default("manual") }));
     const result = startSessionFromWorkItem({ store, workItem: item, trigger: body.trigger, now: now(), idFactory: randomId });
     return c.json(result);
@@ -187,6 +202,10 @@ export function createApp(env: AppEnv = {}) {
   app.get("/api/orchestration-rules", (c) => c.json({ orchestrationRules: store.listOrchestrationRules() }));
   app.post("/api/orchestration-rules", async (c) => {
     const body = await parseJson(c.req, createRuleBody);
+    const auth = await requireWriteAccess(c.req.raw.headers, "rules:write", body.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const rule = store.saveOrchestrationRule({
       id: body.id ?? randomId("rule"),
@@ -211,6 +230,10 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/sessions", async (c) => {
     const body = await parseJson(c.req, createSessionBody);
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", body.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const session = store.saveSession({
       id: body.id ?? randomId("session"),
@@ -254,6 +277,10 @@ export function createApp(env: AppEnv = {}) {
     if (!session) {
       return c.json({ error: "session not found" }, 404);
     }
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const body = await parseJson(c.req, z.object({ events: z.array(SessionEventSchema).min(1) }));
     const runtime = session.runtimeId ? store.getRuntime(session.runtimeId) : undefined;
     const secretRefs = runtime?.environment.secretRefs ?? [];
@@ -266,8 +293,13 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/sessions/:id/handoff", async (c) => {
     const sessionId = c.req.param("id");
-    if (!store.getSession(sessionId)) {
+    const session = store.getSession(sessionId);
+    if (!session) {
       return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "handoffs:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
     const legacyBody = await c.req.json();
     const body = HandoffActionSchema.parse(
@@ -276,49 +308,78 @@ export function createApp(env: AppEnv = {}) {
         : { action: "request", reason: (legacyBody as { reason?: string }).reason, note: (legacyBody as { note?: string }).note ?? "", claimedBy: (legacyBody as { claimedBy?: string }).claimedBy }
     );
     const timestamp = now();
-    const result = applyHandoffAction({ store, sessionId, action: body, now: timestamp, idFactory: randomId });
+    const result = tryHandoff({ store, sessionId, action: body, now: timestamp });
     if (!result) {
       return c.json({ error: "session not found" }, 404);
+    }
+    if ("error" in result) {
+      return c.json({ error: result.error }, 409);
     }
     return c.json({ handoff: result.handoff, session: result.session }, 201);
   });
   app.post("/api/sessions/:id/resume", async (c) => {
+    const session = store.getSession(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "handoffs:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const body = await parseJson(c.req, HandoffActionSchema.partial({ action: true, reason: true, metadata: true }));
-    const result = applyHandoffAction({
+    const result = tryHandoff({
       store,
       sessionId: c.req.param("id"),
       action: HandoffActionSchema.parse({ action: "resume", reason: body.reason, note: body.note, claimedBy: body.claimedBy, metadata: body.metadata ?? {} }),
-      now: now(),
-      idFactory: randomId
+      now: now()
     });
-    return result ? c.json({ handoff: result.handoff, session: result.session }) : c.json({ error: "session not found" }, 404);
+    return handoffResponse(c, result, 200);
   });
   app.post("/api/sessions/:id/approve", async (c) => {
+    const session = store.getSession(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "handoffs:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const body = await parseJson(c.req, HandoffActionSchema.partial({ action: true, reason: true, metadata: true }));
-    const result = applyHandoffAction({
+    const result = tryHandoff({
       store,
       sessionId: c.req.param("id"),
       action: HandoffActionSchema.parse({ action: "approve", reason: body.reason, note: body.note, claimedBy: body.claimedBy, metadata: body.metadata ?? {} }),
-      now: now(),
-      idFactory: randomId
+      now: now()
     });
-    return result ? c.json({ handoff: result.handoff, session: result.session }) : c.json({ error: "session not found" }, 404);
+    return handoffResponse(c, result, 200);
   });
   app.post("/api/sessions/:id/reject", async (c) => {
+    const session = store.getSession(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "handoffs:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const body = await parseJson(c.req, HandoffActionSchema.partial({ action: true, reason: true, metadata: true }));
-    const result = applyHandoffAction({
+    const result = tryHandoff({
       store,
       sessionId: c.req.param("id"),
       action: HandoffActionSchema.parse({ action: "reject", reason: body.reason, note: body.note, claimedBy: body.claimedBy, metadata: body.metadata ?? {} }),
-      now: now(),
-      idFactory: randomId
+      now: now()
     });
-    return result ? c.json({ handoff: result.handoff, session: result.session }) : c.json({ error: "session not found" }, 404);
+    return handoffResponse(c, result, 200);
   });
   app.post("/api/sessions/:id/outcome", async (c) => {
     const sessionId = c.req.param("id");
-    if (!store.getSession(sessionId)) {
+    const session = store.getSession(sessionId);
+    if (!session) {
       return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
     const body = await parseJson(
       c.req,
@@ -342,6 +403,17 @@ export function createApp(env: AppEnv = {}) {
     return c.json({ outcome, session: store.getSession(sessionId) }, 201);
   });
   app.post("/api/sessions/:id/run-local", async (c) => {
+    const session = store.getSession(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: "session not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "runtime:execute", session.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    if (!allowLocalExecution) {
+      return c.json({ error: "local runtime execution is disabled" }, 403);
+    }
     const body = await parseJson(c.req, RuntimeExecutionRequestSchema.partial({ sessionId: true }));
     try {
       const result = await executeLocalRuntime({
@@ -359,6 +431,10 @@ export function createApp(env: AppEnv = {}) {
   app.get("/api/agents", (c) => c.json({ agents: store.listAgents() }));
   app.post("/api/agents", async (c) => {
     const body = await parseJson(c.req, createAgentBody);
+    const auth = await requireWriteAccess(c.req.raw.headers, "agents:write", undefined, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const agent = store.saveAgent({
       id: body.id ?? randomId("agent"),
@@ -379,6 +455,10 @@ export function createApp(env: AppEnv = {}) {
   app.get("/api/runtimes", (c) => c.json({ runtimes: store.listRuntimes() }));
   app.post("/api/runtimes", async (c) => {
     const body = await parseJson(c.req, createRuntimeBody);
+    const auth = await requireWriteAccess(c.req.raw.headers, "runtimes:write", undefined, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const runtime = store.saveRuntime({
       id: body.id ?? randomId("runtime"),
@@ -399,6 +479,10 @@ export function createApp(env: AppEnv = {}) {
 
   app.post("/api/daemon/register", async (c) => {
     const body = await parseJson(c.req, DaemonRegistrationSchema);
+    const auth = await requireWriteAccess(c.req.raw.headers, "daemons:register", undefined, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const existing = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
     const secret = randomSecret();
@@ -500,9 +584,10 @@ export function createApp(env: AppEnv = {}) {
   app.post("/api/daemon/lease/renew", async (c) => {
     const signed = await parseSignedJson(c, LeaseRenewRequestSchema, store, now());
     if (!signed.ok) return c.json({ error: signed.error }, signed.status);
-    const lease = store.renewLease({ leaseId: signed.body.leaseId, runtimeId: signed.body.runtimeId, now: signed.timestamp });
+    const timestamp = now();
+    const lease = store.renewLease({ leaseId: signed.body.leaseId, runtimeId: signed.body.runtimeId, now: timestamp, daemonId: signed.daemon.id });
     if (!lease) {
-      return c.json({ error: "lease not found" }, 404);
+      return c.json({ error: "lease not found or not owned by daemon" }, 409);
     }
     audit(store, {
       actorType: "daemon",
@@ -511,7 +596,7 @@ export function createApp(env: AppEnv = {}) {
       targetType: "lease",
       targetId: lease.id,
       metadata: {},
-      createdAt: lease.renewedAt ?? now()
+      createdAt: lease.renewedAt ?? timestamp
     });
     return c.json({ lease });
   });
@@ -562,10 +647,11 @@ export function createApp(env: AppEnv = {}) {
       leaseId: signed.body.leaseId,
       runtimeId: signed.body.runtimeId,
       sessionId: signed.body.sessionId,
-      now: now()
+      now: now(),
+      daemonId: signed.daemon.id
     });
     if (!lease) {
-      return c.json({ error: "lease not found" }, 404);
+      return c.json({ error: "lease not found or not owned by daemon" }, 409);
     }
     store.appendSessionEvents(signed.body.sessionId, [
       {
@@ -598,17 +684,28 @@ export function createApp(env: AppEnv = {}) {
     if (event !== "issues" && event !== "pull_request") {
       return c.json({ error: "unsupported GitHub event" }, 202);
     }
-    const payload = await c.req.json();
+    const bodyText = await c.req.text();
+    if (githubWebhookSecret) {
+      if (!verifyGitHubSignature(bodyText, githubWebhookSecret, c.req.raw.headers.get("x-hub-signature-256"))) {
+        return c.json({ error: "invalid GitHub webhook signature" }, 401);
+      }
+    } else {
+      const auth = await requireWriteAccess(c.req.raw.headers, "webhooks:write", undefined, requireApiKey, store, bootstrapToken);
+      if (!auth.ok) {
+        return c.json({ error: auth.error }, auth.status);
+      }
+    }
+    const payload = JSON.parse(bodyText);
     const repository = payload.repository;
     const owner = repository?.owner?.login;
     const repo = repository?.name;
     const number = event === "issues" ? payload.issue?.number : payload.pull_request?.number;
-    const codebaseId = payload.codebaseId ?? `${owner}/${repo}`;
     if (!owner || !repo || typeof number !== "number") {
       return c.json({ error: "invalid GitHub webhook payload" }, 400);
     }
-    if (!store.listCodebases().some((codebase) => codebase.id === codebaseId)) {
-      return c.json({ error: `unknown codebase ${codebaseId}` }, 400);
+    const codebase = findGitHubCodebase(store, owner, repo);
+    if (!codebase) {
+      return c.json({ error: `unknown GitHub repository ${owner}/${repo}` }, 400);
     }
     try {
       const fresh =
@@ -616,7 +713,7 @@ export function createApp(env: AppEnv = {}) {
           ? await github.fetchIssue({ owner, repo, number })
           : await github.fetchPullRequest({ owner, repo, number });
       const request = WorkItemUpsertRequestSchema.parse(
-        normalizeGitHubWorkItem({ event, owner, repo, number, codebaseId, payload: fresh })
+        normalizeGitHubWorkItem({ event, owner, repo, number, codebaseId: codebase.id, payload: fresh })
       );
       const { upsertWorkItemFromSource } = await import("./work-items/upsert");
       const result = upsertWorkItemFromSource({ store, request, now: now(), idFactory: randomId });
@@ -637,6 +734,10 @@ export function createApp(env: AppEnv = {}) {
 
   app.post("/api/api-keys", async (c) => {
     const body = await c.req.json();
+    const auth = await requireWriteAccess(c.req.raw.headers, "api_keys:write", undefined, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
     const timestamp = now();
     const token = body.token ?? randomSecret();
     const apiKey = store.createApiKey({
@@ -683,14 +784,41 @@ async function parseSignedJson<T extends z.ZodTypeAny>(
   return { ok: true, body: schema.parse(JSON.parse(bodyText)), daemon: verification.daemon, timestamp: c.req.raw.headers.get("x-automomo-timestamp") ?? timestamp };
 }
 
+function tryHandoff(input: {
+  store: ControlPlaneStore;
+  sessionId: string;
+  action: z.infer<typeof HandoffActionSchema>;
+  now: string;
+}) {
+  try {
+    return applyHandoffAction({ ...input, idFactory: randomId });
+  } catch (err) {
+    if (err instanceof HandoffTransitionError) {
+      return { error: err.message };
+    }
+    throw err;
+  }
+}
+
+function handoffResponse(c: any, result: ReturnType<typeof tryHandoff>, successStatus: 200 | 201) {
+  if (!result) {
+    return c.json({ error: "session not found" }, 404);
+  }
+  if ("error" in result) {
+    return c.json({ error: result.error }, 409);
+  }
+  return c.json({ handoff: result.handoff, session: result.session }, successStatus);
+}
+
 async function requireWriteAccess(
   headers: Headers,
   action: string,
   codebaseId: string | undefined,
   required: boolean,
-  store: ControlPlaneStore
+  store: ControlPlaneStore,
+  bootstrapToken?: string
 ): Promise<
-  | { ok: true; apiKey?: ReturnType<ControlPlaneStore["findApiKeyByToken"]> }
+  | { ok: true; apiKey?: ReturnType<ControlPlaneStore["findApiKeyByToken"]>; bootstrap?: boolean }
   | { ok: false; status: 401 | 403; error: string }
 > {
   if (!required) {
@@ -700,6 +828,9 @@ async function requireWriteAccess(
   if (!token) {
     return { ok: false, status: 401, error: "missing API key" };
   }
+  if (bootstrapToken && token === bootstrapToken) {
+    return { ok: true, bootstrap: true };
+  }
   const apiKey = store.findApiKeyByToken(token);
   if (!apiKey) {
     return { ok: false, status: 401, error: "invalid API key" };
@@ -708,6 +839,45 @@ async function requireWriteAccess(
     return { ok: false, status: 403, error: "API key scope denied" };
   }
   return { ok: true, apiKey };
+}
+
+function verifyGitHubSignature(bodyText: string, secret: string, header: string | null) {
+  if (!header?.startsWith("sha256=")) {
+    return false;
+  }
+  const expected = `sha256=${createHmac("sha256", secret).update(bodyText).digest("hex")}`;
+  return safeHeaderEqual(expected, header);
+}
+
+function safeHeaderEqual(a: string, b: string) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function findGitHubCodebase(store: ControlPlaneStore, owner: string, repo: string) {
+  const expected = `${owner}/${repo}`.toLowerCase();
+  return store.listCodebases().find((codebase) => {
+    if (codebase.provider !== "github") {
+      return false;
+    }
+    return codebase.id.toLowerCase() === expected || normalizeGitHubRepo(codebase.sourceUrl) === expected;
+  });
+}
+
+function normalizeGitHubRepo(sourceUrl: string | undefined) {
+  if (!sourceUrl) {
+    return undefined;
+  }
+  try {
+    const url = new URL(sourceUrl);
+    if (url.hostname !== "github.com") {
+      return undefined;
+    }
+    return url.pathname.replace(/^\/+/, "").replace(/\.git$/, "").toLowerCase();
+  } catch {
+    return undefined;
+  }
 }
 
 function audit(

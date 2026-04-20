@@ -50,7 +50,7 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
     );
     expect(renew.status).toBe(200);
     const renewPayload = (await renew.json()) as { lease: { renewedAt?: string } };
-    expect(renewPayload.lease.renewedAt).toBe(later);
+    expect(renewPayload.lease.renewedAt).toBe(now);
 
     const failBody = {
       runtimeId: "runtime_1",
@@ -84,7 +84,10 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
           updated_at: later
         })
     });
-    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "github" }));
+    await app.request(
+      "/api/codebases",
+      json({ id: "codebase_1", name: "automomo", provider: "github", sourceUrl: "https://github.com/matrixorigin/automomo" })
+    );
 
     const body = {
       action: "opened",
@@ -111,7 +114,7 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
   it("runs a co-located shell runtime and stores a structured outcome", async () => {
     const dir = mkdtempSync(join(tmpdir(), "automomo-shell-runtime-"));
     try {
-      const app = createApp({ store: new MemoryStore(), now: () => new Date(now) });
+      const app = createApp({ store: new MemoryStore(), now: () => new Date(now), allowLocalExecution: true });
       await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "local", workspaceRoot: dir }));
       await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Run shell" }));
       await app.request(
@@ -161,7 +164,7 @@ describe("daemon identity, security, ingress, and local runtime execution", () =
       id: "key_1",
       name: "Codebase key",
       token: "valid-token",
-      scopes: [{ codebaseId: "codebase_1", actions: ["work_items:write"] }],
+      scopes: [{ codebaseId: "codebase_1", actions: ["work_items:write", "sessions:write"] }, { actions: ["runtimes:write"] }],
       createdAt: now,
       updatedAt: now
     });
@@ -244,7 +247,8 @@ async function signedHeaders(
 ) {
   const bodyText = JSON.stringify(body);
   const bodyHash = await digest(bodyText);
-  const canonical = [method, path, timestamp, bodyHash, daemonId, runtimeId].join("\n");
+  const nonce = (await digest(`${method}:${path}:${timestamp}:${bodyText}`)).slice(0, 16);
+  const canonical = [method, path, timestamp, bodyHash, daemonId, runtimeId, nonce].join("\n");
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
     "sign"
   ]);
@@ -253,6 +257,7 @@ async function signedHeaders(
     "x-automomo-daemon-id": daemonId,
     "x-automomo-runtime-id": runtimeId,
     "x-automomo-timestamp": timestamp,
+    "x-automomo-nonce": nonce,
     "x-automomo-signature": hex(signature)
   };
 }

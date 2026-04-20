@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@automomo/pi-runtime": "workspace:*",
     "@automomo/protocol": "workspace:*",
     "@hono/node-server": "^1.14.4",
     "better-sqlite3": "^11.10.0",

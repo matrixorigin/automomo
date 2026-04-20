@@ -5,19 +5,22 @@ import {
   LeaseResponseSchema,
   Outcome,
   Runtime,
+  RuntimeHeartbeat,
   RuntimeSchema,
   SessionEvent
 } from "@automomo/protocol";
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 
 export interface DaemonApiClientOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  now?: () => Date;
 }
 
 export class DaemonApiClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly now: () => Date;
   private identity:
     | {
         daemonId: string;
@@ -29,6 +32,7 @@ export class DaemonApiClient {
   constructor(options: DaemonApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.now = options.now ?? (() => new Date());
   }
 
   async register(registration: DaemonRegistration): Promise<Runtime> {
@@ -47,12 +51,24 @@ export class DaemonApiClient {
     return LeaseResponseSchema.parse(payload).lease;
   }
 
+  async heartbeat(input: RuntimeHeartbeat) {
+    return this.post("/api/daemon/heartbeat", input);
+  }
+
+  async renewLease(input: { runtimeId: string; leaseId: string }) {
+    return this.post("/api/daemon/lease/renew", input);
+  }
+
   async uploadEvents(input: { runtimeId: string; leaseId: string; sessionId: string; events: SessionEvent[] }) {
     return this.post("/api/daemon/events", input);
   }
 
   async uploadOutcome(input: { runtimeId: string; leaseId: string; sessionId: string; outcome: Outcome }) {
     return this.post("/api/daemon/outcome", input);
+  }
+
+  async failLease(input: { runtimeId: string; leaseId: string; sessionId: string; reason: string; detail?: string; metadata?: Record<string, unknown> }) {
+    return this.post("/api/daemon/fail", input);
   }
 
   private async post(path: string, body: unknown): Promise<any> {
@@ -72,7 +88,8 @@ export class DaemonApiClient {
     if (!this.identity) {
       return {};
     }
-    const timestamp = new Date().toISOString();
+    const timestamp = this.now().toISOString();
+    const nonce = randomUUID();
     const bodyHash = createHash("sha256").update(bodyText).digest("hex");
     const canonical = [
       "POST",
@@ -80,13 +97,15 @@ export class DaemonApiClient {
       timestamp,
       bodyHash,
       this.identity.daemonId,
-      this.identity.runtimeId
+      this.identity.runtimeId,
+      nonce
     ].join("\n");
     const signature = createHmac("sha256", this.identity.secret).update(canonical).digest("hex");
     return {
       "x-automomo-daemon-id": this.identity.daemonId,
       "x-automomo-runtime-id": this.identity.runtimeId,
       "x-automomo-timestamp": timestamp,
+      "x-automomo-nonce": nonce,
       "x-automomo-signature": signature
     };
   }

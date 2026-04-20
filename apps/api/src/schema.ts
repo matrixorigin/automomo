@@ -147,6 +147,12 @@ export const runtimeLeases = sqliteTable("runtime_leases", {
   createdAt: text("created_at").notNull()
 });
 
+export const daemonNonces = sqliteTable("daemon_nonces", {
+  daemonId: text("daemon_id").notNull(),
+  nonce: text("nonce").notNull(),
+  expiresAt: text("expires_at").notNull()
+});
+
 export const apiKeys = sqliteTable("api_keys", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

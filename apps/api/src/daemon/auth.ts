@@ -9,6 +9,7 @@ export function canonicalDaemonString(input: {
   bodyText: string;
   daemonId: string;
   runtimeId: string;
+  nonce: string;
 }) {
   return [
     input.method.toUpperCase(),
@@ -16,7 +17,8 @@ export function canonicalDaemonString(input: {
     input.timestamp,
     createHash("sha256").update(input.bodyText).digest("hex"),
     input.daemonId,
-    input.runtimeId
+    input.runtimeId,
+    input.nonce
   ].join("\n");
 }
 
@@ -27,6 +29,7 @@ export function signDaemonRequest(input: {
   bodyText: string;
   daemonId: string;
   runtimeId: string;
+  nonce: string;
   secret: string;
 }) {
   return createHmac("sha256", input.secret).update(canonicalDaemonString(input)).digest("hex");
@@ -44,6 +47,7 @@ export function verifyDaemonRequest(input: {
     daemonId: input.headers.get("x-automomo-daemon-id"),
     runtimeId: input.headers.get("x-automomo-runtime-id"),
     timestamp: input.headers.get("x-automomo-timestamp"),
+    nonce: input.headers.get("x-automomo-nonce"),
     signature: input.headers.get("x-automomo-signature"),
     signatureVersion: input.headers.get("x-automomo-signature-version") ?? "hmac-sha256-v1"
   });
@@ -58,8 +62,12 @@ export function verifyDaemonRequest(input: {
   if (daemon.runtimeId !== parsed.data.runtimeId) {
     return { ok: false as const, status: 403, error: "daemon runtime mismatch" };
   }
-  if (Math.abs(Date.parse(input.now) - Date.parse(parsed.data.timestamp)) > 24 * 60 * 60 * 1000) {
+  if (Math.abs(Date.parse(input.now) - Date.parse(parsed.data.timestamp)) > 5 * 60 * 1000) {
     return { ok: false as const, status: 401, error: "stale daemon signature" };
+  }
+  const bodyRuntimeId = runtimeIdFromBody(input.bodyText);
+  if (bodyRuntimeId && bodyRuntimeId !== parsed.data.runtimeId) {
+    return { ok: false as const, status: 403, error: "daemon body runtime mismatch" };
   }
 
   const expected = signDaemonRequest({
@@ -69,10 +77,15 @@ export function verifyDaemonRequest(input: {
     bodyText: input.bodyText,
     daemonId: parsed.data.daemonId,
     runtimeId: parsed.data.runtimeId,
+    nonce: parsed.data.nonce,
     secret: daemon.secret
   });
   if (!safeEqual(expected, parsed.data.signature)) {
     return { ok: false as const, status: 401, error: "invalid daemon signature" };
+  }
+  const nonceExpiresAt = new Date(Date.parse(input.now) + 5 * 60 * 1000).toISOString();
+  if (!input.store.recordDaemonNonce({ daemonId: parsed.data.daemonId, nonce: parsed.data.nonce, expiresAt: nonceExpiresAt })) {
+    return { ok: false as const, status: 401, error: "replayed daemon signature" };
   }
   return { ok: true as const, daemon };
 }
@@ -81,4 +94,13 @@ function safeEqual(a: string, b: string) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function runtimeIdFromBody(bodyText: string) {
+  try {
+    const body = JSON.parse(bodyText) as { runtimeId?: unknown };
+    return typeof body.runtimeId === "string" ? body.runtimeId : undefined;
+  } catch {
+    return undefined;
+  }
 }
