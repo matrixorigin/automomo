@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>automomo Programa Alignment</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <div class="identity">
+          <div class="mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <strong>automomo</strong>
+            <p>Codebase workspace</p>
+          </div>
+          <button class="icon-button" aria-label="Switch workspace">v</button>
+        </div>
+
+        <nav class="nav-block" aria-label="Main">
+          <a class="nav-item muted" href="#getting-started"><span class="dot"></span>Getting Started</a>
+          <a class="nav-item muted" href="#projects"><span class="box-icon"></span>Projects</a>
+        </nav>
+
+        <div class="nav-section">
+          <button class="section-toggle" type="button">v</button>
+          <span>automomo</span>
+        </div>
+        <nav class="nav-block" aria-label="Repository">
+          <a class="nav-item active" href="#schedule"><span class="stack-icon"></span>Work items</a>
+          <a class="nav-item" href="#pinboard"><span class="grid-icon"></span>Sessions</a>
+          <a class="nav-item" href="#automation"><span class="rail-icon"></span>Orchestration</a>
+        </nav>
+
+        <div class="nav-section">
+          <button class="section-toggle" type="button">v</button>
+          <span>Tools</span>
+        </div>
+        <nav class="nav-block compact" aria-label="Tools">
+          <a class="nav-item" href="#time"><span class="hour-icon"></span>Runtime</a>
+          <a class="nav-item" href="#todo"><span class="check-icon"></span>To-Do List</a>
+          <a class="nav-item" href="#studio"><span class="grid-icon"></span>Agent Studio</a>
+          <a class="nav-item" href="#runtime"><span class="box-icon"></span>Runtimes</a>
+          <a class="nav-item" href="#handoff"><span class="line-icon"></span>Human Handoffs</a>
+          <a class="nav-item" href="#outcomes"><span class="doc-icon"></span>Outcomes</a>
+        </nav>
+
+        <div class="nav-section libraries">
+          <span>Libraries</span>
+        </div>
+        <nav class="nav-block compact" aria-label="Libraries">
+          <a class="nav-item selected" href="#guides"><span class="doc-icon"></span>Runtime Guides</a>
+          <a class="nav-item help" href="#help"><span class="box-icon"></span>Need Help?</a>
+        </nav>
+
+        <div class="upgrade">
+          <div>
+            <strong>Upgrade plan</strong>
+            <span>6 days left</span>
+          </div>
+          <button type="button">Upgrade</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div class="launch-strip">
+          <span>Just launched: Programa alignment for shared codebase work</span>
+          <a href="docs/programa-alignment-spec.md">Read design spec</a>
+          <button class="strip-close" type="button" aria-label="Dismiss announcement">x</button>
+        </div>
+
+        <header class="topbar">
+          <div class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="#projects">Projects</a>
+            <span>/</span>
+            <a href="#automomo">automomo</a>
+            <span>/</span>
+            <strong>Work items</strong>
+            <button class="icon-button" type="button" aria-label="Open schedule menu">v</button>
+          </div>
+
+          <div class="actions">
+            <button class="secondary-action" type="button">Bulk Analyze</button>
+            <button class="primary-action" type="button">Share</button>
+            <button class="icon-button" type="button" aria-label="More actions">...</button>
+          </div>
+        </header>
+
+        <section class="mode-row" aria-label="Work controls">
+          <div class="tabs" role="tablist" aria-label="Work mode">
+            <button class="tab active" type="button" data-tab="summary">Summary</button>
+            <button class="tab" type="button" data-tab="financial">Work items</button>
+            <button class="tab" type="button" data-tab="approvals">Sessions</button>
+          </div>
+
+          <button class="plain-control" type="button">Navigate to Section v</button>
+
+          <div class="tool-controls">
+            <label class="search">
+              <span aria-hidden="true"></span>
+              <input id="searchInput" type="search" placeholder="Search" />
+            </label>
+            <button class="plain-control" type="button">Filter</button>
+            <button class="plain-control" type="button">Sort</button>
+          </div>
+        </section>
+
+        <section class="totals" aria-label="Workspace summary">
+          <div>
+            <small>Open</small>
+            <strong>42</strong>
+            <span>total items</span>
+          </div>
+          <div>
+            <small>Ready</small>
+            <strong>18</strong>
+            <span>agent ready</span>
+          </div>
+          <div>
+            <small>Blocked</small>
+            <strong>4</strong>
+            <span>needs context</span>
+          </div>
+          <button class="round-next" type="button" aria-label="Open summary">>></button>
+        </section>
+
+        <section class="markup-row" aria-label="Handoff note toggle">
+          <label class="switch">
+            <input id="markupToggle" type="checkbox" />
+            <span></span>
+          </label>
+          <button id="markupButton" class="markup-link" type="button">Add handoff note</button>
+        </section>
+
+        <section class="schedule" id="schedule">
+          <div class="floor-heading">
+            <h1>Urgent <span>4</span></h1>
+          </div>
+
+          <article class="schedule-row" data-search="race condition websocket reconnect realtime queue">
+            <div class="asset-thumb thumb-green" aria-hidden="true">
+              <span></span>
+            </div>
+            <div class="item-main">
+              <strong>Reconnect race in realtime queue</strong>
+              <small>A soft, durable mid-session path inspired by Programa rows.</small>
+              <span>WORK-1042</span>
+            </div>
+            <div class="item-meta">
+              <small>Agent</small>
+              <strong>Ralph</strong>
+              <span>collaborator</span>
+            </div>
+            <div class="item-meta">
+              <small>Difficulty</small>
+              <strong>Hard</strong>
+              <span>async UI</span>
+            </div>
+            <div class="item-meta wide">
+              <small>Owner</small>
+              <strong>automomo</strong>
+              <span>frontend</span>
+            </div>
+            <div class="row-actions">
+              <button type="button">Details</button>
+              <button class="muted-button" type="button">Quote</button>
+              <select aria-label="Session status" name="status-iss-1042">
+                <option>Quoting</option>
+                <option>Ready</option>
+                <option>Blocked</option>
+              </select>
+              <button class="icon-button" type="button" aria-label="More row actions">...</button>
+            </div>
+          </article>
+
+          <article class="schedule-row" data-search="auth guard empty state login token storage">
+            <div class="asset-thumb thumb-grey" aria-hidden="true">
+              <span></span>
+            </div>
+            <div class="item-main">
+              <strong>Auth guard empty-state clarity</strong>
+              <small>Reduce panel chrome and keep the action path visible.</small>
+              <span>WORK-291</span>
+            </div>
+            <div class="item-meta">
+              <small>Agent</small>
+              <strong>Nova</strong>
+              <span>security</span>
+            </div>
+            <div class="item-meta">
+              <small>Difficulty</small>
+              <strong>Medium</strong>
+              <span>contracts</span>
+            </div>
+            <div class="item-meta wide">
+              <small>Owner</small>
+              <strong>automomo</strong>
+              <span>auth</span>
+            </div>
+            <div class="row-actions">
+              <button type="button">Details</button>
+              <button class="muted-button" type="button">Quote</button>
+              <select aria-label="Session status" name="status-pr-291">
+                <option>Human Handoff</option>
+                <option>Ready</option>
+                <option>Blocked</option>
+              </select>
+              <button class="icon-button" type="button" aria-label="More row actions">...</button>
+            </div>
+          </article>
+
+          <div class="floor-heading">
+            <h1>Ready <span>11</span></h1>
+          </div>
+
+          <article class="schedule-row" data-search="saved filters queue board high signal labels">
+            <div class="asset-thumb thumb-yellow" aria-hidden="true">
+              <span></span>
+            </div>
+            <div class="item-main">
+              <strong>Shared runtime for high-signal work</strong>
+              <small>Make the codebase workspace feel like a working schedule, not a card wall.</small>
+              <span>WORK-987</span>
+            </div>
+            <div class="item-meta">
+              <small>Agent</small>
+              <strong>Kite</strong>
+              <span>maintainer</span>
+            </div>
+            <div class="item-meta">
+              <small>Difficulty</small>
+              <strong>Simple</strong>
+              <span>UI polish</span>
+            </div>
+            <div class="item-meta wide">
+              <small>Owner</small>
+              <strong>automomo</strong>
+              <span>prototype</span>
+            </div>
+            <div class="row-actions">
+              <button type="button">Details</button>
+              <button class="muted-button" type="button">Quote</button>
+              <select aria-label="Session status" name="status-iss-987">
+                <option>Approved</option>
+                <option>Ready</option>
+                <option>Blocked</option>
+              </select>
+              <button class="icon-button" type="button" aria-label="More row actions">...</button>
+            </div>
+          </article>
+
+          <button class="new-section" type="button">+ New Section</button>
+        </section>
+
+        <aside class="floating-note" aria-label="Selected note">
+          <button type="button" aria-label="Close note">x</button>
+          <strong>Confirm handoff on shared runtime flow</strong>
+          <span>DESIGN DEVELOPMENT</span>
+          <p>Capture the human decision before the next agent session starts.</p>
+          <small>24 Mar</small>
+        </aside>
+
+        <button class="new-button" type="button">+ New</button>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+coverage/
+.turbo/
+.playwright-cli/
+
+apps/web/.next/
+apps/*/node_modules/
+packages/*/node_modules/
+
+.DS_Store
+*.log
+*.tsbuildinfo
+
+!apps/web/src/lib/
+!apps/web/src/lib/**

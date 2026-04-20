@@ -1,0 +1,20 @@
+{
+  "name": "automomo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-agent human/AI orchestration for codebase runtimes.",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @automomo/api dev",
+    "dev:web": "pnpm --filter @automomo/web dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "packageManager": "pnpm@10.12.4",
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
