@@ -1,15 +1,29 @@
 import { AppShell } from "@/components/AppShell";
 import { DataRow, DataRows } from "@/components/DataRows";
+import { EmptyState } from "@/components/EmptyState";
+import { SessionDetailPanel } from "@/components/SessionDetailPanel";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { agents, runtimes, sessionEvents, sessions, workItems } from "@/lib/mock-data";
+import { getApiClient } from "@/lib/api";
 
-export default function SessionsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SessionsPage() {
+  const api = getApiClient();
+  const [overview, sessions, workItems, agents, runtimes] = await Promise.all([
+    api.getOverview(),
+    api.listSessions(),
+    api.listWorkItems(),
+    api.listAgents(),
+    api.listRuntimes()
+  ]);
+  const selected = sessions.items[0] ? await api.getSession(sessions.items[0].id) : undefined;
   return (
-    <AppShell active="Sessions">
+    <AppShell active="Sessions" overview={overview}>
       <WorkspaceHeader section="Sessions" title="Human and agent sessions" action="Open session" />
-      <DataRows title="Live sessions" count={sessions.length}>
-        {sessions.map((session) => {
-          const workItem = workItems.find((item) => item.id === session.workItemId);
+      <DataRows title="Live sessions" count={sessions.page.total}>
+        {sessions.items.length === 0 ? <EmptyState title="No sessions" body="Matched work starts here once a rule routes it." /> : null}
+        {sessions.items.map((session) => {
+          const workItem = workItems.items.find((item) => item.id === session.workItemId);
           const agent = agents.find((item) => item.id === session.agentId);
           const runtime = runtimes.find((item) => item.id === session.runtimeId);
           return (
@@ -29,16 +43,7 @@ export default function SessionsPage() {
           );
         })}
       </DataRows>
-      <section className="timeline" id="handoffs">
-        <h2>Session timeline</h2>
-        {sessionEvents.map((event) => (
-          <article key={event.id}>
-            <small>{event.kind}</small>
-            <strong>{event.summary}</strong>
-            <span>{event.detail}</span>
-          </article>
-        ))}
-      </section>
+      {selected ? <SessionDetailPanel detail={selected} /> : null}
     </AppShell>
   );
 }

@@ -29,3 +29,14 @@ Remote runtimes use outbound HTTP polling with leases in the MVP. This keeps the
 user-run daemon simple and avoids requiring inbound network access to a private
 machine. Webhooks, long polling, or a relay can be added later when real usage
 shows the need.
+
+## Follow-Up Gates
+
+Detailed gates now live in:
+
+- [Daemon Protocol](./daemon-protocol.md)
+- [Runtime Capabilities](./runtime-capabilities.md)
+
+The Go daemon and BoxLite/VM runtime stay deferred until those documents'
+criteria are satisfied by the TypeScript daemon, shell/Docker provider surface,
+Pi runtime adapter, and runtime UI.

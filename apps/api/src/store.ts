@@ -1,14 +1,21 @@
 import Database from "better-sqlite3";
 import { asc, eq } from "drizzle-orm";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as schema from "./schema";
 import {
   Agent,
   AgentSchema,
+  ApiKey,
+  ApiKeySchema,
+  AuditEvent,
+  AuditEventSchema,
   Codebase,
   CodebaseSchema,
+  Daemon,
+  DaemonSchema,
   HumanHandoff,
   HumanHandoffSchema,
   OrchestrationRule,
@@ -20,8 +27,12 @@ import {
   Session,
   SessionEvent,
   SessionEventSchema,
+  SessionListQuery,
+  SessionListResponse,
   SessionSchema,
   WorkItem,
+  WorkItemListQuery,
+  WorkItemListResponse,
   WorkItemSchema
 } from "@automomo/protocol";
 
@@ -29,9 +40,19 @@ export interface RuntimeLease {
   id: string;
   runtimeId: string;
   sessionId: string;
+  daemonId?: string;
   expiresAt: string;
+  renewedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
   createdAt: string;
 }
+
+export type ApiKeyInput = Omit<ApiKey, "tokenHash" | "metadata"> & {
+  token?: string;
+  tokenHash?: string;
+  metadata?: Record<string, unknown>;
+};
 
 export class LeaseError extends Error {
   constructor(message: string) {
@@ -45,15 +66,18 @@ export interface ControlPlaneStore {
   listCodebases(): Codebase[];
   saveWorkItem(item: WorkItem): WorkItem;
   listWorkItems(): WorkItem[];
+  listWorkItems(query: WorkItemListQuery): WorkItemListResponse;
   getWorkItem(id: string): WorkItem | undefined;
   saveOrchestrationRule(rule: OrchestrationRule): OrchestrationRule;
   listOrchestrationRules(): OrchestrationRule[];
   saveSession(session: Session): Session;
   listSessions(): Session[];
+  listSessions(query: SessionListQuery): SessionListResponse;
   getSession(id: string): Session | undefined;
   updateSession(id: string, patch: Partial<Session>): Session | undefined;
   appendSessionEvents(sessionId: string, events: SessionEvent[]): SessionEvent[];
   listSessionEvents(sessionId: string): SessionEvent[];
+  listAllSessionEvents(limit?: number): SessionEvent[];
   saveRuntime(runtime: Runtime): Runtime;
   listRuntimes(): Runtime[];
   getRuntime(id: string): Runtime | undefined;
@@ -61,11 +85,25 @@ export interface ControlPlaneStore {
   listAgents(): Agent[];
   getAgent(id: string): Agent | undefined;
   saveOutcome(outcome: Outcome): Outcome;
+  getOutcome(id: string): Outcome | undefined;
+  getOutcomeForSession(sessionId: string): Outcome | undefined;
   saveHandoff(handoff: HumanHandoff): HumanHandoff;
+  listHandoffs(sessionId?: string): HumanHandoff[];
+  saveDaemon(daemon: Daemon & { secret: string }): Daemon & { secret: string };
+  getDaemon(id: string): (Daemon & { secret: string }) | undefined;
+  listDaemons(): Daemon[];
   createLease(lease: RuntimeLease): RuntimeLease;
   findLease(id: string): RuntimeLease | undefined;
-  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }): RuntimeLease;
+  renewLease(input: { leaseId: string; runtimeId: string; now: string }): RuntimeLease | undefined;
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }): RuntimeLease | undefined;
+  completeLease(input: { leaseId: string; now: string }): RuntimeLease | undefined;
+  reclaimExpiredLeases(now: string): RuntimeLease[];
+  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }): RuntimeLease;
   nextQueuedSession(runtimeId: string): Session | undefined;
+  createApiKey(input: ApiKeyInput): ApiKey;
+  findApiKeyByToken(token: string): ApiKey | undefined;
+  appendAuditEvent(event: AuditEvent): AuditEvent;
+  listAuditEvents(): AuditEvent[];
 }
 
 export class MemoryStore implements ControlPlaneStore {
@@ -78,7 +116,10 @@ export class MemoryStore implements ControlPlaneStore {
   readonly runtimes = new Map<string, Runtime>();
   readonly outcomes = new Map<string, Outcome>();
   readonly handoffs = new Map<string, HumanHandoff[]>();
+  readonly daemons = new Map<string, Daemon & { secret: string }>();
   readonly leases = new Map<string, RuntimeLease>();
+  readonly apiKeys = new Map<string, ApiKey>();
+  readonly auditEvents: AuditEvent[] = [];
 
   saveCodebase(codebase: Codebase) {
     const parsed = CodebaseSchema.parse(codebase);
@@ -96,8 +137,11 @@ export class MemoryStore implements ControlPlaneStore {
     return parsed;
   }
 
-  listWorkItems() {
-    return [...this.workItems.values()];
+  listWorkItems(): WorkItem[];
+  listWorkItems(query: WorkItemListQuery): WorkItemListResponse;
+  listWorkItems(query?: WorkItemListQuery) {
+    const items = sortByCreatedAtAndId([...this.workItems.values()]);
+    return query ? paginate(filterWorkItems(items, query), query) : items;
   }
 
   getWorkItem(id: string) {
@@ -120,8 +164,11 @@ export class MemoryStore implements ControlPlaneStore {
     return parsed;
   }
 
-  listSessions() {
-    return [...this.sessions.values()];
+  listSessions(): Session[];
+  listSessions(query: SessionListQuery): SessionListResponse;
+  listSessions(query?: SessionListQuery) {
+    const items = sortByCreatedAtAndId([...this.sessions.values()]);
+    return query ? paginate(filterSessions(items, query), query) : items;
   }
 
   getSession(id: string) {
@@ -151,6 +198,13 @@ export class MemoryStore implements ControlPlaneStore {
 
   listSessionEvents(sessionId: string) {
     return this.events.get(sessionId) ?? [];
+  }
+
+  listAllSessionEvents(limit = 50) {
+    return [...this.events.values()]
+      .flat()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.sequence - a.sequence || b.id.localeCompare(a.id))
+      .slice(0, limit);
   }
 
   saveRuntime(runtime: Runtime) {
@@ -193,6 +247,14 @@ export class MemoryStore implements ControlPlaneStore {
     return parsed;
   }
 
+  getOutcome(id: string) {
+    return this.outcomes.get(id);
+  }
+
+  getOutcomeForSession(sessionId: string) {
+    return [...this.outcomes.values()].find((outcome) => outcome.sessionId === sessionId);
+  }
+
   saveHandoff(handoff: HumanHandoff) {
     const parsed = HumanHandoffSchema.parse(handoff);
     this.handoffs.set(parsed.sessionId, [...(this.handoffs.get(parsed.sessionId) ?? []), parsed]);
@@ -205,14 +267,37 @@ export class MemoryStore implements ControlPlaneStore {
     return parsed;
   }
 
+  listHandoffs(sessionId?: string) {
+    if (sessionId) {
+      return this.handoffs.get(sessionId) ?? [];
+    }
+    return [...this.handoffs.values()].flat();
+  }
+
+  saveDaemon(daemon: Daemon & { secret: string }) {
+    const parsed = { ...DaemonSchema.parse(daemon), secret: daemon.secret };
+    this.daemons.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  getDaemon(id: string) {
+    return this.daemons.get(id);
+  }
+
+  listDaemons() {
+    return [...this.daemons.values()].map(({ secret: _secret, ...daemon }) => daemon);
+  }
+
   createLease(lease: RuntimeLease) {
     this.leases.set(lease.id, lease);
-    this.updateSession(lease.sessionId, {
-      leaseId: lease.id,
-      runtimeId: lease.runtimeId,
-      status: "leased",
-      updatedAt: lease.createdAt
-    });
+    if (!lease.completedAt && !lease.failedAt) {
+      this.updateSession(lease.sessionId, {
+        leaseId: lease.id,
+        runtimeId: lease.runtimeId,
+        status: "leased",
+        updatedAt: lease.createdAt
+      });
+    }
     return lease;
   }
 
@@ -220,13 +305,63 @@ export class MemoryStore implements ControlPlaneStore {
     return this.leases.get(id);
   }
 
-  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+  renewLease(input: { leaseId: string; runtimeId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease || lease.runtimeId !== input.runtimeId) {
+      return undefined;
+    }
+    const renewed = { ...lease, renewedAt: input.now, expiresAt: new Date(Date.parse(input.now) + 5 * 60 * 1000).toISOString() };
+    this.leases.set(renewed.id, renewed);
+    return renewed;
+  }
+
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease || lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
+      return undefined;
+    }
+    const failed = { ...lease, failedAt: input.now };
+    this.leases.set(failed.id, failed);
+    this.updateSession(input.sessionId, { status: "failed", updatedAt: input.now, completedAt: input.now });
+    return failed;
+  }
+
+  completeLease(input: { leaseId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease) {
+      return undefined;
+    }
+    const completed = { ...lease, completedAt: input.now };
+    this.leases.set(completed.id, completed);
+    return completed;
+  }
+
+  reclaimExpiredLeases(now: string) {
+    const reclaimed: RuntimeLease[] = [];
+    for (const lease of this.leases.values()) {
+      if (!lease.completedAt && !lease.failedAt && Date.parse(lease.expiresAt) <= Date.parse(now)) {
+        const failed = { ...lease, failedAt: now };
+        this.leases.set(failed.id, failed);
+        this.updateSession(lease.sessionId, { status: "queued", leaseId: undefined, updatedAt: now });
+        reclaimed.push(failed);
+      }
+    }
+    return reclaimed;
+  }
+
+  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
     if (!lease) {
       throw new LeaseError("lease not found");
     }
     if (lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
       throw new LeaseError("lease does not match runtime and session");
+    }
+    if (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId) {
+      throw new LeaseError("lease does not match daemon");
+    }
+    if (lease.completedAt || lease.failedAt) {
+      throw new LeaseError("lease is closed");
     }
     if (Date.parse(lease.expiresAt) <= Date.parse(input.now)) {
       throw new LeaseError("lease expired");
@@ -242,6 +377,28 @@ export class MemoryStore implements ControlPlaneStore {
       return !session.runtimeId || session.runtimeId === runtimeId;
     });
   }
+
+  createApiKey(input: ApiKeyInput) {
+    const tokenHash = input.tokenHash ?? hashToken(input.token ?? "");
+    const parsed = ApiKeySchema.parse({ ...input, tokenHash, metadata: input.metadata ?? {} });
+    this.apiKeys.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  findApiKeyByToken(token: string) {
+    const tokenHash = hashToken(token);
+    return [...this.apiKeys.values()].find((key) => key.tokenHash === tokenHash);
+  }
+
+  appendAuditEvent(event: AuditEvent) {
+    const parsed = AuditEventSchema.parse(event);
+    this.auditEvents.push(parsed);
+    return parsed;
+  }
+
+  listAuditEvents() {
+    return [...this.auditEvents];
+  }
 }
 
 export interface SQLiteStoreOptions {
@@ -256,6 +413,11 @@ type SessionEventRow = typeof schema.sessionEvents.$inferSelect;
 type RuntimeRow = typeof schema.runtimes.$inferSelect;
 type AgentRow = typeof schema.agents.$inferSelect;
 type RuntimeLeaseRow = typeof schema.runtimeLeases.$inferSelect;
+type HumanHandoffRow = typeof schema.humanHandoffs.$inferSelect;
+type OutcomeRow = typeof schema.outcomes.$inferSelect;
+type DaemonRow = typeof schema.daemons.$inferSelect;
+type ApiKeyRow = typeof schema.apiKeys.$inferSelect;
+type AuditEventRow = typeof schema.auditEvents.$inferSelect;
 
 export class SQLiteStore implements ControlPlaneStore {
   private readonly sqlite: Database.Database;
@@ -349,8 +511,16 @@ export class SQLiteStore implements ControlPlaneStore {
     return parsed;
   }
 
-  listWorkItems() {
-    return this.db.select().from(schema.workItems).orderBy(asc(schema.workItems.createdAt)).all().map(rowToWorkItem);
+  listWorkItems(): WorkItem[];
+  listWorkItems(query: WorkItemListQuery): WorkItemListResponse;
+  listWorkItems(query?: WorkItemListQuery) {
+    const items = this.db
+      .select()
+      .from(schema.workItems)
+      .orderBy(asc(schema.workItems.createdAt), asc(schema.workItems.id))
+      .all()
+      .map(rowToWorkItem);
+    return query ? paginate(filterWorkItems(items, query), query) : items;
   }
 
   getWorkItem(id: string) {
@@ -445,8 +615,16 @@ export class SQLiteStore implements ControlPlaneStore {
     return parsed;
   }
 
-  listSessions() {
-    return this.db.select().from(schema.sessions).orderBy(asc(schema.sessions.createdAt)).all().map(rowToSession);
+  listSessions(): Session[];
+  listSessions(query: SessionListQuery): SessionListResponse;
+  listSessions(query?: SessionListQuery) {
+    const items = this.db
+      .select()
+      .from(schema.sessions)
+      .orderBy(asc(schema.sessions.createdAt), asc(schema.sessions.id))
+      .all()
+      .map(rowToSession);
+    return query ? paginate(filterSessions(items, query), query) : items;
   }
 
   getSession(id: string) {
@@ -511,6 +689,17 @@ export class SQLiteStore implements ControlPlaneStore {
       .orderBy(asc(schema.sessionEvents.sequence), asc(schema.sessionEvents.createdAt))
       .all()
       .map(rowToSessionEvent);
+  }
+
+  listAllSessionEvents(limit = 50) {
+    return this.db
+      .select()
+      .from(schema.sessionEvents)
+      .orderBy(asc(schema.sessionEvents.createdAt), asc(schema.sessionEvents.sequence))
+      .all()
+      .map(rowToSessionEvent)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.sequence - a.sequence || b.id.localeCompare(a.id))
+      .slice(0, limit);
   }
 
   saveRuntime(runtime: Runtime) {
@@ -639,6 +828,16 @@ export class SQLiteStore implements ControlPlaneStore {
     return parsed;
   }
 
+  getOutcome(id: string) {
+    const row = this.db.select().from(schema.outcomes).where(eq(schema.outcomes.id, id)).get();
+    return row ? rowToOutcome(row) : undefined;
+  }
+
+  getOutcomeForSession(sessionId: string) {
+    const row = this.db.select().from(schema.outcomes).where(eq(schema.outcomes.sessionId, sessionId)).get();
+    return row ? rowToOutcome(row) : undefined;
+  }
+
   saveHandoff(handoff: HumanHandoff) {
     const parsed = HumanHandoffSchema.parse(handoff);
     this.db
@@ -675,6 +874,66 @@ export class SQLiteStore implements ControlPlaneStore {
     return parsed;
   }
 
+  listHandoffs(sessionId?: string) {
+    const rows = sessionId
+      ? this.db.select().from(schema.humanHandoffs).where(eq(schema.humanHandoffs.sessionId, sessionId)).all()
+      : this.db.select().from(schema.humanHandoffs).all();
+    return rows.map(rowToHumanHandoff).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  saveDaemon(daemon: Daemon & { secret: string }) {
+    const parsed = { ...DaemonSchema.parse(daemon), secret: daemon.secret };
+    this.db
+      .insert(schema.daemons)
+      .values({
+        id: parsed.id,
+        runtimeId: parsed.runtimeId,
+        name: parsed.name,
+        secretId: parsed.secretId,
+        secret: parsed.secret,
+        signatureVersion: parsed.signatureVersion,
+        status: parsed.status,
+        lastSeenAt: parsed.lastSeenAt,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.daemons.id,
+        set: {
+          runtimeId: parsed.runtimeId,
+          name: parsed.name,
+          secretId: parsed.secretId,
+          secret: parsed.secret,
+          signatureVersion: parsed.signatureVersion,
+          status: parsed.status,
+          lastSeenAt: parsed.lastSeenAt,
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  getDaemon(id: string) {
+    const row = this.db.select().from(schema.daemons).where(eq(schema.daemons.id, id)).get();
+    return row ? rowToDaemonWithSecret(row) : undefined;
+  }
+
+  listDaemons() {
+    return this.db
+      .select()
+      .from(schema.daemons)
+      .orderBy(asc(schema.daemons.createdAt), asc(schema.daemons.id))
+      .all()
+      .map((row) => {
+        const { secret: _secret, ...daemon } = rowToDaemonWithSecret(row);
+        return daemon;
+      });
+  }
+
   createLease(lease: RuntimeLease) {
     this.db
       .insert(schema.runtimeLeases)
@@ -682,7 +941,11 @@ export class SQLiteStore implements ControlPlaneStore {
         id: lease.id,
         runtimeId: lease.runtimeId,
         sessionId: lease.sessionId,
+        daemonId: lease.daemonId,
         expiresAt: lease.expiresAt,
+        renewedAt: lease.renewedAt,
+        completedAt: lease.completedAt,
+        failedAt: lease.failedAt,
         createdAt: lease.createdAt
       })
       .onConflictDoUpdate({
@@ -690,17 +953,23 @@ export class SQLiteStore implements ControlPlaneStore {
         set: {
           runtimeId: lease.runtimeId,
           sessionId: lease.sessionId,
+          daemonId: lease.daemonId,
           expiresAt: lease.expiresAt,
+          renewedAt: lease.renewedAt,
+          completedAt: lease.completedAt,
+          failedAt: lease.failedAt,
           createdAt: lease.createdAt
         }
       })
       .run();
-    this.updateSession(lease.sessionId, {
-      leaseId: lease.id,
-      runtimeId: lease.runtimeId,
-      status: "leased",
-      updatedAt: lease.createdAt
-    });
+    if (!lease.completedAt && !lease.failedAt) {
+      this.updateSession(lease.sessionId, {
+        leaseId: lease.id,
+        runtimeId: lease.runtimeId,
+        status: "leased",
+        updatedAt: lease.createdAt
+      });
+    }
     return lease;
   }
 
@@ -709,13 +978,60 @@ export class SQLiteStore implements ControlPlaneStore {
     return row ? rowToRuntimeLease(row) : undefined;
   }
 
-  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+  renewLease(input: { leaseId: string; runtimeId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease || lease.runtimeId !== input.runtimeId) {
+      return undefined;
+    }
+    const renewed = { ...lease, renewedAt: input.now, expiresAt: new Date(Date.parse(input.now) + 5 * 60 * 1000).toISOString() };
+    return this.createLease(renewed);
+  }
+
+  failLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease || lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
+      return undefined;
+    }
+    const failed = this.createLease({ ...lease, failedAt: input.now });
+    this.updateSession(input.sessionId, { status: "failed", updatedAt: input.now, completedAt: input.now });
+    return failed;
+  }
+
+  completeLease(input: { leaseId: string; now: string }) {
+    const lease = this.findLease(input.leaseId);
+    if (!lease) {
+      return undefined;
+    }
+    return this.createLease({ ...lease, completedAt: input.now });
+  }
+
+  reclaimExpiredLeases(now: string) {
+    const expired = this.db
+      .select()
+      .from(schema.runtimeLeases)
+      .all()
+      .map(rowToRuntimeLease)
+      .filter((lease) => !lease.completedAt && !lease.failedAt && Date.parse(lease.expiresAt) <= Date.parse(now));
+    for (const lease of expired) {
+      this.createLease({ ...lease, failedAt: now });
+      this.updateSession(lease.sessionId, { status: "queued", leaseId: undefined, updatedAt: now });
+    }
+    return expired.map((lease) => ({ ...lease, failedAt: now }));
+  }
+
+  assertLease(input: { leaseId: string; runtimeId: string; sessionId: string; now: string; daemonId?: string }) {
     const lease = this.findLease(input.leaseId);
     if (!lease) {
       throw new LeaseError("lease not found");
     }
     if (lease.runtimeId !== input.runtimeId || lease.sessionId !== input.sessionId) {
       throw new LeaseError("lease does not match runtime and session");
+    }
+    if (input.daemonId && lease.daemonId && lease.daemonId !== input.daemonId) {
+      throw new LeaseError("lease does not match daemon");
+    }
+    if (lease.completedAt || lease.failedAt) {
+      throw new LeaseError("lease is closed");
     }
     if (Date.parse(lease.expiresAt) <= Date.parse(input.now)) {
       throw new LeaseError("lease expired");
@@ -730,6 +1046,68 @@ export class SQLiteStore implements ControlPlaneStore {
       }
       return !session.runtimeId || session.runtimeId === runtimeId;
     });
+  }
+
+  createApiKey(input: ApiKeyInput) {
+    const tokenHash = input.tokenHash ?? hashToken(input.token ?? "");
+    const parsed = ApiKeySchema.parse({ ...input, tokenHash, metadata: input.metadata ?? {} });
+    this.db
+      .insert(schema.apiKeys)
+      .values({
+        id: parsed.id,
+        name: parsed.name,
+        tokenHash: parsed.tokenHash,
+        scopesJson: stringifyJson(parsed.scopes),
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.apiKeys.id,
+        set: {
+          name: parsed.name,
+          tokenHash: parsed.tokenHash,
+          scopesJson: stringifyJson(parsed.scopes),
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  findApiKeyByToken(token: string) {
+    const tokenHash = hashToken(token);
+    const row = this.db.select().from(schema.apiKeys).where(eq(schema.apiKeys.tokenHash, tokenHash)).get();
+    return row ? rowToApiKey(row) : undefined;
+  }
+
+  appendAuditEvent(event: AuditEvent) {
+    const parsed = AuditEventSchema.parse(event);
+    this.db
+      .insert(schema.auditEvents)
+      .values({
+        id: parsed.id,
+        actorType: parsed.actorType,
+        actorId: parsed.actorId,
+        action: parsed.action,
+        targetType: parsed.targetType,
+        targetId: parsed.targetId,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt
+      })
+      .run();
+    return parsed;
+  }
+
+  listAuditEvents() {
+    return this.db
+      .select()
+      .from(schema.auditEvents)
+      .orderBy(asc(schema.auditEvents.createdAt), asc(schema.auditEvents.id))
+      .all()
+      .map(rowToAuditEvent);
   }
 
   close() {
@@ -861,14 +1239,58 @@ export class SQLiteStore implements ControlPlaneStore {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS daemons (
+        id TEXT PRIMARY KEY,
+        runtime_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        secret_id TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        signature_version TEXT NOT NULL,
+        status TEXT NOT NULL,
+        last_seen_at TEXT,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS runtime_leases (
         id TEXT PRIMARY KEY,
         runtime_id TEXT NOT NULL,
         session_id TEXT NOT NULL,
+        daemon_id TEXT,
         expires_at TEXT NOT NULL,
+        renewed_at TEXT,
+        completed_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL,
+        scopes_json TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS api_keys_token_hash_idx ON api_keys (token_hash);
+
+      CREATE TABLE IF NOT EXISTS audit_events (
+        id TEXT PRIMARY KEY,
+        actor_type TEXT NOT NULL,
+        actor_id TEXT,
+        action TEXT NOT NULL,
+        target_type TEXT NOT NULL,
+        target_id TEXT,
+        metadata_json TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
     `);
+    addColumnIfMissing(this.sqlite, "runtime_leases", "daemon_id", "TEXT");
+    addColumnIfMissing(this.sqlite, "runtime_leases", "renewed_at", "TEXT");
+    addColumnIfMissing(this.sqlite, "runtime_leases", "completed_at", "TEXT");
+    addColumnIfMissing(this.sqlite, "runtime_leases", "failed_at", "TEXT");
   }
 }
 
@@ -1015,7 +1437,142 @@ function rowToRuntimeLease(row: RuntimeLeaseRow): RuntimeLease {
     id: row.id,
     runtimeId: row.runtimeId,
     sessionId: row.sessionId,
+    daemonId: row.daemonId ?? undefined,
     expiresAt: row.expiresAt,
+    renewedAt: row.renewedAt ?? undefined,
+    completedAt: row.completedAt ?? undefined,
+    failedAt: row.failedAt ?? undefined,
     createdAt: row.createdAt
   };
+}
+
+function rowToOutcome(row: OutcomeRow): Outcome {
+  return OutcomeSchema.parse({
+    id: row.id,
+    sessionId: row.sessionId,
+    status: row.status,
+    summary: row.summary,
+    result: parseJson(row.resultJson),
+    eventsUploaded: row.eventsUploaded,
+    createdAt: row.createdAt
+  });
+}
+
+function rowToHumanHandoff(row: HumanHandoffRow): HumanHandoff {
+  return HumanHandoffSchema.parse({
+    id: row.id,
+    sessionId: row.sessionId,
+    status: row.status,
+    reason: row.reason,
+    note: row.note,
+    claimedBy: row.claimedBy ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
+function rowToDaemonWithSecret(row: DaemonRow): Daemon & { secret: string } {
+  return {
+    ...DaemonSchema.parse({
+      id: row.id,
+      runtimeId: row.runtimeId,
+      name: row.name,
+      secretId: row.secretId,
+      signatureVersion: row.signatureVersion,
+      status: row.status,
+      lastSeenAt: row.lastSeenAt ?? undefined,
+      metadata: parseJson(row.metadataJson),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt
+    }),
+    secret: row.secret
+  };
+}
+
+function rowToApiKey(row: ApiKeyRow): ApiKey {
+  return ApiKeySchema.parse({
+    id: row.id,
+    name: row.name,
+    tokenHash: row.tokenHash,
+    scopes: parseJson(row.scopesJson),
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
+function rowToAuditEvent(row: AuditEventRow): AuditEvent {
+  return AuditEventSchema.parse({
+    id: row.id,
+    actorType: row.actorType,
+    actorId: row.actorId ?? undefined,
+    action: row.action,
+    targetType: row.targetType,
+    targetId: row.targetId ?? undefined,
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt
+  });
+}
+
+function sortByCreatedAtAndId<T extends { createdAt: string; id: string }>(items: T[]) {
+  return [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
+function paginate<T>(items: T[], query: { limit: number; offset: number }) {
+  return {
+    items: items.slice(query.offset, query.offset + query.limit),
+    page: {
+      limit: query.limit,
+      offset: query.offset,
+      total: items.length
+    }
+  };
+}
+
+function filterWorkItems(items: WorkItem[], query: WorkItemListQuery) {
+  const q = query.q?.toLowerCase();
+  return items.filter((item) => {
+    if (query.codebaseId && item.codebaseId !== query.codebaseId) return false;
+    if (query.source && item.source !== query.source) return false;
+    if (query.status && item.status !== query.status) return false;
+    if (query.assignee && item.metadata.assignee !== query.assignee) return false;
+    if (q && !`${item.title} ${item.body} ${item.labels.join(" ")}`.toLowerCase().includes(q)) return false;
+    if (!withinRange(item.createdAt, query.createdAfter, query.createdBefore)) return false;
+    if (!withinRange(item.updatedAt, query.updatedAfter, query.updatedBefore)) return false;
+    return true;
+  });
+}
+
+function filterSessions(items: Session[], query: SessionListQuery) {
+  const participant = query.participant?.toLowerCase();
+  return items.filter((session) => {
+    if (query.status && session.status !== query.status) return false;
+    if (query.codebaseId && session.codebaseId !== query.codebaseId) return false;
+    if (query.agentId && session.agentId !== query.agentId) return false;
+    if (query.runtimeId && session.runtimeId !== query.runtimeId) return false;
+    if (participant && !session.participants.some((item) => `${item.id ?? ""} ${item.name}`.toLowerCase().includes(participant))) {
+      return false;
+    }
+    if (!withinRange(session.createdAt, query.createdAfter, query.createdBefore)) return false;
+    if (!withinRange(session.updatedAt, query.updatedAfter, query.updatedBefore)) return false;
+    return true;
+  });
+}
+
+function withinRange(value: string, after?: string, before?: string) {
+  const time = Date.parse(value);
+  if (after && time < Date.parse(after)) return false;
+  if (before && time > Date.parse(before)) return false;
+  return true;
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function addColumnIfMissing(db: Database.Database, table: string, column: string, type: string) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((item) => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }

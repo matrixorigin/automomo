@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash, createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,10 +9,10 @@ import { MemoryStore, SQLiteStore } from "../src/store";
 const now = "2026-04-20T08:00:00.000Z";
 const later = "2026-04-20T08:01:00.000Z";
 
-function json(body: unknown) {
+function json(body: unknown, headers: Record<string, string> = {}) {
   return {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body)
   };
 }
@@ -39,6 +40,7 @@ describe("automomo API", () => {
       json({ id: "runtime_1", name: "Local Pi runtime", mode: "local", provider: "pi", status: "online" })
     );
     expect(runtimeRes.status).toBe(201);
+    const daemon = await registerDaemon(app, "runtime_1", now);
 
     const sessionRes = await app.request(
       "/api/sessions",
@@ -46,14 +48,14 @@ describe("automomo API", () => {
     );
     expect(sessionRes.status).toBe(201);
 
-    const leaseRes = await app.request("/api/daemon/lease", json({ runtimeId: "runtime_1" }));
+    const leaseRes = await app.request("/api/daemon/lease", signedJson("/api/daemon/lease", { runtimeId: "runtime_1" }, daemon, now));
     expect(leaseRes.status).toBe(200);
     const leasePayload = (await leaseRes.json()) as { lease: { leaseId: string } };
 
     current = later;
     const eventRes = await app.request(
       "/api/daemon/events",
-      json({
+      signedJson("/api/daemon/events", {
         runtimeId: "runtime_1",
         leaseId: leasePayload.lease.leaseId,
         sessionId: "session_1",
@@ -67,7 +69,7 @@ describe("automomo API", () => {
             createdAt: later
           }
         ]
-      })
+      }, daemon, later)
     );
     expect(eventRes.status).toBe(200);
 
@@ -80,7 +82,7 @@ describe("automomo API", () => {
 
     const outcomeRes = await app.request(
       "/api/daemon/outcome",
-      json({
+      signedJson("/api/daemon/outcome", {
         runtimeId: "runtime_1",
         leaseId: leasePayload.lease.leaseId,
         sessionId: "session_1",
@@ -93,7 +95,7 @@ describe("automomo API", () => {
           eventsUploaded: 1,
           createdAt: later
         }
-      })
+      }, daemon, later)
     );
     const outcomePayload = (await outcomeRes.json()) as { session: { status: string; outcomeId: string } };
     expect(outcomePayload.session.status).toBe("completed");
@@ -106,12 +108,13 @@ describe("automomo API", () => {
 
     await app.request("/api/runtimes", json({ id: "runtime_1", name: "Remote", mode: "remote_daemon", provider: "pi" }));
     await app.request("/api/sessions", json({ id: "session_1", codebaseId: "codebase_1", runtimeId: "runtime_1" }));
-    const leaseRes = await app.request("/api/daemon/lease", json({ runtimeId: "runtime_1" }));
+    const daemon = await registerDaemon(app, "runtime_1", now);
+    const leaseRes = await app.request("/api/daemon/lease", signedJson("/api/daemon/lease", { runtimeId: "runtime_1" }, daemon, now));
     const leasePayload = (await leaseRes.json()) as { lease: { leaseId: string } };
 
     const badUpload = await app.request(
       "/api/daemon/events",
-      json({
+      signedJson("/api/daemon/events", {
         runtimeId: "runtime_other",
         leaseId: leasePayload.lease.leaseId,
         sessionId: "session_1",
@@ -125,7 +128,7 @@ describe("automomo API", () => {
             createdAt: now
           }
         ]
-      })
+      }, daemon, now)
     );
 
     expect(badUpload.status).toBe(409);
@@ -136,9 +139,15 @@ describe("automomo API", () => {
     const app = createApp({ store, now: () => new Date(now) });
 
     await app.request("/api/runtimes", json({ id: "runtime_1", name: "Remote", mode: "remote_daemon", provider: "pi" }));
+    const daemon = await registerDaemon(app, "runtime_1", now);
     const heartbeat = await app.request(
       "/api/daemon/heartbeat",
-      json({ runtimeId: "runtime_1", status: "busy", activeSessions: 1, capacity: 3, observedAt: later })
+      signedJson(
+        "/api/daemon/heartbeat",
+        { runtimeId: "runtime_1", status: "busy", activeSessions: 1, capacity: 3, observedAt: later },
+        daemon,
+        later
+      )
     );
 
     const payload = (await heartbeat.json()) as { runtime: { status: string; activeSessions: number; capacity: number } };
@@ -192,6 +201,7 @@ describe("automomo API", () => {
         "/api/runtimes",
         json({ id: "runtime_1", name: "Remote Pi", mode: "remote_daemon", provider: "pi", status: "online" })
       );
+      const daemon = await registerDaemon(firstApp, "runtime_1", now);
       await firstApp.request(
         "/api/sessions",
         json({
@@ -234,7 +244,7 @@ describe("automomo API", () => {
         expect.objectContaining({ id: "rule_1", agentId: "agent_1", runtimeId: "runtime_1" })
       ]);
 
-      const leaseRes = await secondApp.request("/api/daemon/lease", json({ runtimeId: "runtime_1" }));
+      const leaseRes = await secondApp.request("/api/daemon/lease", signedJson("/api/daemon/lease", { runtimeId: "runtime_1" }, daemon, later));
       const leasePayload = (await leaseRes.json()) as {
         lease: {
           leaseId: string;
@@ -254,7 +264,7 @@ describe("automomo API", () => {
       const thirdApp = createApp({ store: new SQLiteStore({ path: dbPath }), now: () => new Date(later) });
       const uploadRes = await thirdApp.request(
         "/api/daemon/events",
-        json({
+        signedJson("/api/daemon/events", {
           runtimeId: "runtime_1",
           leaseId: leasePayload.lease.leaseId,
           sessionId: "session_1",
@@ -268,7 +278,7 @@ describe("automomo API", () => {
               createdAt: later
             }
           ]
-        })
+        }, daemon, later)
       );
       expect(uploadRes.status).toBe(200);
 
@@ -280,7 +290,7 @@ describe("automomo API", () => {
 
       const outcomeRes = await thirdApp.request(
         "/api/daemon/outcome",
-        json({
+        signedJson("/api/daemon/outcome", {
           runtimeId: "runtime_1",
           leaseId: leasePayload.lease.leaseId,
           sessionId: "session_1",
@@ -293,7 +303,7 @@ describe("automomo API", () => {
             eventsUploaded: 1,
             createdAt: later
           }
-        })
+        }, daemon, later)
       );
       expect(outcomeRes.status).toBe(200);
 
@@ -305,11 +315,33 @@ describe("automomo API", () => {
       ]);
       const eventsRes = await fourthApp.request("/api/sessions/session_1/events");
       const eventsPayload = (await eventsRes.json()) as { events: Array<{ id: string; summary: string }> };
-      expect(eventsPayload.events).toEqual([
-        expect.objectContaining({ id: "event_1", summary: "SQLite lease persisted" })
-      ]);
+      expect(eventsPayload.events).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "event_1", summary: "SQLite lease persisted" })])
+      );
     } finally {
       rmSync(dir, { force: true, recursive: true });
     }
   });
 });
+
+async function registerDaemon(app: ReturnType<typeof createApp>, runtimeId: string, timestamp: string) {
+  const res = await app.request(
+    "/api/daemon/register",
+    json({ runtimeId, name: "Test daemon", provider: "pi", environment: { networkPolicy: "restricted", env: {}, secretRefs: [] } })
+  );
+  const payload = (await res.json()) as { daemon: { id: string; runtimeId: string }; secret: string };
+  return { ...payload, timestamp };
+}
+
+function signedJson(path: string, body: unknown, registration: { daemon: { id: string; runtimeId: string }; secret: string }, timestamp: string) {
+  const bodyText = JSON.stringify(body);
+  const bodyHash = createHash("sha256").update(bodyText).digest("hex");
+  const canonical = ["POST", path, timestamp, bodyHash, registration.daemon.id, registration.daemon.runtimeId].join("\n");
+  const signature = createHmac("sha256", registration.secret).update(canonical).digest("hex");
+  return json(body, {
+    "x-automomo-daemon-id": registration.daemon.id,
+    "x-automomo-runtime-id": registration.daemon.runtimeId,
+    "x-automomo-timestamp": timestamp,
+    "x-automomo-signature": signature
+  });
+}

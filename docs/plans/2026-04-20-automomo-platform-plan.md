@@ -1,7 +1,7 @@
 # automomo Platform Implementation Plan
 
 Date: 2026-04-20
-Status: Draft
+Status: Active - reviewed 2026-04-20
 
 ## Problem Frame
 
@@ -36,6 +36,42 @@ Overview -> Work Items -> Orchestration -> Sessions -> Agents -> Runtimes
 - A small Go daemon binary can be added later as a hardened connector.
 - Remote runtime connectivity starts with outbound HTTP polling and leases.
 - Remote sessions upload structured outcomes and event metadata by default.
+
+## Review Snapshot: 2026-04-20
+
+The first implementation pass has moved beyond the original static prototype. The repo now has the TypeScript monorepo shape, protocol schemas, a SQLite-backed API control plane, a TypeScript daemon lease loop, a metadata-only Pi runtime adapter, a Programa-inspired web shell, architecture docs, and an end-to-end local-machine runtime test that uses this repo as the example workspace.
+
+Completed or mostly completed:
+
+- Repo foundation for `apps/web`, `apps/api`, `apps/daemon`, `packages/protocol`, and `packages/pi-runtime`.
+- Static Programa prototype preserved under `docs/prototypes/programa-static`.
+- Automomo vocabulary established in README, architecture docs, routes, schemas, and UI copy.
+- Shared protocol schemas for codebases, work items, orchestration rules, sessions, events, agents, runtimes, outcomes, handoffs, daemon registration, heartbeats, leases, event uploads, and outcome uploads.
+- API list/create and session/event/daemon endpoints backed by the default SQLite store.
+- Basic web navigation for Overview, Work Items, Orchestration, Sessions, Agents, and Runtimes using mock data.
+- TypeScript daemon worker that registers/heartbeats, polls leases, emits events, and uploads outcomes.
+- Local runtime e2e coverage proving the daemon/control-plane flow against this repository.
+
+Persistent todos created from this review:
+
+- `#001` Wire the web UI to live API data and add the Overview endpoint.
+- `#002` Add work item and session filtering contracts.
+- `#003` Implement orchestration rule evaluation and automatic session starts.
+- `#004` Complete session detail, outcome, and human handoff flows.
+- `#005` Harden the daemon lease protocol and CLI operations.
+- `#006` Replace the Pi runtime stub with a real Pi Mono execution adapter.
+- `#007` Add connector-neutral work item ingress and GitHub fresh-context upsert.
+- `#008` Implement co-located local runtime execution in the API.
+- `#009` Add editor workflows and health surfaces for rules, agents, and runtimes.
+- `#010` Add security and operations hardening before real codebase use.
+- `#011` Defer the Go daemon and BoxLite/VM runtime until the TypeScript runtime path stabilizes.
+
+Review notes:
+
+- The implementation currently uses singular daemon endpoints such as `/api/daemon/lease`, while this plan lists plural `/api/daemons/*` endpoints. Decide whether to keep the shipped singular contract, add aliases, or rename before external daemon clients depend on it.
+- The protocol schemas are consolidated in `packages/protocol/src/index.ts` instead of split per-domain files. Split only if the file becomes a maintenance problem.
+- The Pi runtime adapter currently proves session metadata translation, not real Pi Mono coding-agent execution.
+- The local-machine e2e test proves remote-daemon lease flow, not the co-located API runtime provider from Phase 8.
 
 ## Architecture Target
 

@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  ApiKeySchema,
+  AuditEventSchema,
   CodebaseSchema,
+  DaemonRegistrationResponseSchema,
+  DaemonSchema,
+  HandoffActionSchema,
   LeaseOutcomeUploadSchema,
+  LeaseRenewRequestSchema,
+  OverviewSchema,
+  PiRuntimeConfigSchema,
+  RuleEvaluationResultSchema,
+  RuntimeExecutionRequestSchema,
+  RuntimeExecutionResultSchema,
+  SessionDetailResponseSchema,
   SessionEventEnvelopeSchema,
+  SessionListQuerySchema,
+  SessionStartRequestSchema,
+  WorkItemListQuerySchema,
+  WorkItemListResponseSchema,
+  WorkItemUpsertRequestSchema,
   WorkItemSchema
 } from "../src/index";
 
@@ -69,5 +86,181 @@ describe("automomo protocol schemas", () => {
 
     expect(upload.outcome.eventsUploaded).toBe(0);
     expect(upload.outcome.result).toEqual({ patchReady: true });
+  });
+
+  it("parses overview state for live web surfaces", () => {
+    const overview = OverviewSchema.parse({
+      counts: {
+        codebases: 1,
+        workItems: 2,
+        sessions: 3,
+        agents: 1,
+        runtimes: 2
+      },
+      runtimeHealth: { online: 1, busy: 1, offline: 0, idle: 0, unhealthy: 0 },
+      handoffCount: 1,
+      daemonCount: 1,
+      activeSessionCount: 2,
+      recentEvents: [
+        {
+          id: "event_1",
+          sessionId: "session_1",
+          sequence: 0,
+          kind: "runtime",
+          summary: "Runtime accepted session",
+          createdAt: now
+        }
+      ]
+    });
+
+    expect(overview.counts.workItems).toBe(2);
+    expect(overview.recentEvents[0]?.metadata).toEqual({});
+  });
+
+  it("defaults list filters and rejects invalid enum values", () => {
+    expect(WorkItemListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
+    expect(SessionListQuerySchema.parse({ limit: "200", offset: "10" })).toMatchObject({ limit: 200, offset: 10 });
+
+    expect(() => WorkItemListQuerySchema.parse({ status: "reviewing" })).toThrow();
+    expect(() => WorkItemListQuerySchema.parse({ limit: 201 })).toThrow();
+    expect(() => SessionListQuerySchema.parse({ status: "unknown" })).toThrow();
+  });
+
+  it("wraps list responses with stable pagination metadata", () => {
+    const response = WorkItemListResponseSchema.parse({
+      items: [
+        {
+          id: "work_1",
+          codebaseId: "codebase_1",
+          title: "Run local runtime",
+          createdAt: now,
+          updatedAt: now
+        }
+      ],
+      page: { limit: 50, offset: 0, total: 1 }
+    });
+
+    expect(response.items[0]?.status).toBe("open");
+    expect(response.page.total).toBe(1);
+  });
+
+  it("models orchestration matches and session start requests", () => {
+    const matched = RuleEvaluationResultSchema.parse({
+      matched: true,
+      ruleId: "rule_1",
+      reason: "labels matched runtime",
+      agentId: "agent_1",
+      runtimeId: "runtime_1",
+      requiresHumanApproval: true
+    });
+    const noMatch = RuleEvaluationResultSchema.parse({
+      matched: false,
+      reason: "no enabled rule matched"
+    });
+    const start = SessionStartRequestSchema.parse({ workItemId: "work_1", trigger: "manual" });
+
+    expect(matched.matched ? matched.ruleId : undefined).toBe("rule_1");
+    expect(noMatch.matched).toBe(false);
+    expect(start.trigger).toBe("manual");
+  });
+
+  it("models handoff actions and session detail responses", () => {
+    const action = HandoffActionSchema.parse({
+      action: "claim",
+      reason: "Human is taking over",
+      claimedBy: "randomradio"
+    });
+    const detail = SessionDetailResponseSchema.parse({
+      session: {
+        id: "session_1",
+        codebaseId: "codebase_1",
+        status: "needs_human",
+        participants: [],
+        metadata: {},
+        createdAt: now,
+        updatedAt: now
+      },
+      events: [],
+      handoffs: [],
+      outcome: undefined,
+      workItem: undefined,
+      agent: undefined,
+      runtime: undefined
+    });
+
+    expect(action.action).toBe("claim");
+    expect(detail.session.id).toBe("session_1");
+  });
+
+  it("models daemon identity, lease renewal, runtime execution, ingress, and audit contracts", () => {
+    const daemon = DaemonSchema.parse({
+      id: "daemon_1",
+      runtimeId: "runtime_1",
+      name: "Local daemon",
+      secretId: "secret_1",
+      signatureVersion: "hmac-sha256-v1",
+      status: "online",
+      createdAt: now,
+      updatedAt: now
+    });
+    const registration = DaemonRegistrationResponseSchema.parse({
+      daemon,
+      runtime: {
+        id: "runtime_1",
+        name: "Local daemon",
+        mode: "remote_daemon",
+        provider: "pi",
+        environment: { networkPolicy: "restricted", env: {}, secretRefs: [] },
+        status: "online",
+        capacity: 1,
+        activeSessions: 0,
+        metadata: {},
+        createdAt: now,
+        updatedAt: now
+      },
+      secret: "daemon-secret"
+    });
+    const renew = LeaseRenewRequestSchema.parse({ runtimeId: "runtime_1", leaseId: "lease_1" });
+    const runtimeRequest = RuntimeExecutionRequestSchema.parse({ sessionId: "session_1", provider: "shell" });
+    const runtimeResult = RuntimeExecutionResultSchema.parse({
+      sessionId: "session_1",
+      status: "success",
+      outcomeId: "outcome_1",
+      eventsUploaded: 2
+    });
+    const upsert = WorkItemUpsertRequestSchema.parse({
+      codebaseId: "codebase_1",
+      connector: { type: "github", id: "issue-1", metadata: { owner: "matrixorigin", repo: "automomo" } },
+      title: "Fresh source context",
+      source: "webhook"
+    });
+    const apiKey = ApiKeySchema.parse({
+      id: "key_1",
+      name: "Webhook key",
+      tokenHash: "hash",
+      scopes: [{ codebaseId: "codebase_1", actions: ["work_items:write"] }],
+      createdAt: now,
+      updatedAt: now
+    });
+    const audit = AuditEventSchema.parse({
+      id: "audit_1",
+      actorType: "api_key",
+      actorId: "key_1",
+      action: "work_item.upsert",
+      targetType: "work_item",
+      targetId: "work_1",
+      metadata: { safe: true },
+      createdAt: now
+    });
+    const piConfig = PiRuntimeConfigSchema.parse({ mode: "sdk", cwd: "/tmp/work", toolsMode: "readonly" });
+
+    expect(registration.secret).toBe("daemon-secret");
+    expect(renew.leaseId).toBe("lease_1");
+    expect(runtimeRequest.provider).toBe("shell");
+    expect(runtimeResult.status).toBe("success");
+    expect(upsert.connector.metadata).toMatchObject({ repo: "automomo" });
+    expect(apiKey.scopes[0]?.actions).toContain("work_items:write");
+    expect(audit.actorType).toBe("api_key");
+    expect(piConfig.toolsMode).toBe("readonly");
   });
 });

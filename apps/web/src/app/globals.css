@@ -270,7 +270,8 @@ a {
   background: var(--white);
 }
 
-.launch-strip {
+.launch-strip,
+.status-strip {
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -283,6 +284,26 @@ a {
 }
 
 .launch-strip a {
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+.status-strip {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.status-strip span {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.status-strip strong {
+  color: var(--yellow);
+}
+
+.status-strip a {
+  margin-left: auto;
   color: var(--yellow);
   font-weight: 700;
 }
@@ -616,12 +637,110 @@ a {
 }
 
 .settings-grid input,
-.settings-grid select {
+.settings-grid select,
+.editor-panel input,
+.editor-panel select,
+.editor-panel textarea {
   min-height: 38px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--white);
   padding: 0 10px;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.empty-state strong {
+  color: var(--ink);
+}
+
+.empty-state button,
+.editor-panel button,
+.handoff-controls button {
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--white);
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.editor-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+}
+
+.editor-panel label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.editor-panel span,
+.detail-panel dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.editor-panel .wide {
+  grid-column: span 2;
+}
+
+.toggle-row {
+  display: flex !important;
+  align-items: center;
+  grid-template-columns: auto 1fr;
+}
+
+.detail-panel {
+  margin: 0 30px 36px;
+  border-top: 1px solid var(--line);
+}
+
+.detail-panel header {
+  padding: 18px 0 10px;
+}
+
+.detail-panel h2 {
+  margin: 4px 0;
+}
+
+.detail-panel dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.detail-panel dd {
+  margin: 4px 0 0;
+}
+
+.handoff-controls,
+.handoff-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.route-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 100vh;
+  padding: 30px;
 }
 
 @media (max-width: 980px) {
@@ -636,7 +755,8 @@ a {
 
   .mode-row,
   .topbar,
-  .launch-strip {
+  .launch-strip,
+  .status-strip {
     align-items: stretch;
   }
 
@@ -649,13 +769,20 @@ a {
   .actions,
   .row-actions,
   .mode-row,
-  .launch-strip {
+  .launch-strip,
+  .status-strip {
     flex-wrap: wrap;
   }
 
   .totals,
-  .settings-grid {
+  .settings-grid,
+  .editor-panel,
+  .detail-panel dl {
     grid-template-columns: 1fr;
+  }
+
+  .editor-panel .wide {
+    grid-column: auto;
   }
 
   .schedule-row {

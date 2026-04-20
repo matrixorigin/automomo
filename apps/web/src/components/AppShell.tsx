@@ -1,5 +1,7 @@
 import Link from "next/link";
 import React, { ReactNode } from "react";
+import { Overview } from "@automomo/protocol";
+import { StatusStrip } from "./StatusStrip";
 
 const navItems = [
   { href: "/", label: "Overview" },
@@ -10,7 +12,7 @@ const navItems = [
   { href: "/runtimes", label: "Runtimes" }
 ];
 
-export function AppShell({ active, children }: { active: string; children: ReactNode }) {
+export function AppShell({ active, children, overview }: { active: string; children: ReactNode; overview?: Overview }) {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Workspace navigation">
@@ -66,10 +68,7 @@ export function AppShell({ active, children }: { active: string; children: React
       </aside>
 
       <main className="workspace">
-        <div className="launch-strip">
-          <span>automomo coordinates humans and agents on shared codebase runtimes</span>
-          <Link href="/runtimes">View runtimes</Link>
-        </div>
+        <StatusStrip overview={overview} />
         {children}
       </main>
     </div>

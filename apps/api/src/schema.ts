@@ -121,10 +121,49 @@ export const humanHandoffs = sqliteTable("human_handoffs", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const daemons = sqliteTable("daemons", {
+  id: text("id").primaryKey(),
+  runtimeId: text("runtime_id").notNull(),
+  name: text("name").notNull(),
+  secretId: text("secret_id").notNull(),
+  secret: text("secret").notNull(),
+  signatureVersion: text("signature_version").notNull(),
+  status: text("status").notNull(),
+  lastSeenAt: text("last_seen_at"),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
 export const runtimeLeases = sqliteTable("runtime_leases", {
   id: text("id").primaryKey(),
   runtimeId: text("runtime_id").notNull(),
   sessionId: text("session_id").notNull(),
+  daemonId: text("daemon_id"),
   expiresAt: text("expires_at").notNull(),
+  renewedAt: text("renewed_at"),
+  completedAt: text("completed_at"),
+  failedAt: text("failed_at"),
+  createdAt: text("created_at").notNull()
+});
+
+export const apiKeys = sqliteTable("api_keys", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  scopesJson: text("scopes_json").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const auditEvents = sqliteTable("audit_events", {
+  id: text("id").primaryKey(),
+  actorType: text("actor_type").notNull(),
+  actorId: text("actor_id"),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id"),
+  metadataJson: text("metadata_json").notNull(),
   createdAt: text("created_at").notNull()
 });

@@ -1,6 +1,9 @@
 import {
   Agent,
   Outcome,
+  OutcomeSchema,
+  PiRuntimeConfig,
+  PiRuntimeConfigSchema,
   Runtime,
   Session,
   SessionEvent,
@@ -26,13 +29,18 @@ export interface PiRuntimeRunner {
 export interface PiRuntimeAdapterOptions {
   runner?: PiRuntimeRunner;
   now?: () => Date;
+  config?: Partial<PiRuntimeConfig>;
+  sessionFactory?: PiSessionFactory;
 }
 
 export class PiRuntimeAdapter {
   private readonly runner: PiRuntimeRunner;
 
   constructor(options: PiRuntimeAdapterOptions = {}) {
-    this.runner = options.runner ?? new MetadataOnlyPiRunner(options.now);
+    const config = PiRuntimeConfigSchema.parse(options.config ?? {});
+    this.runner =
+      options.runner ??
+      (config.mode === "sdk" ? createPiSdkRunner({ config, now: options.now, sessionFactory: options.sessionFactory }) : createMetadataOnlyRunner({ now: options.now }));
   }
 
   runSession(context: PiRuntimeContext) {
@@ -42,6 +50,164 @@ export class PiRuntimeAdapter {
 
 export function createPiRuntimeAdapter(options: PiRuntimeAdapterOptions = {}) {
   return new PiRuntimeAdapter(options);
+}
+
+export function createMetadataOnlyRunner(options: { now?: () => Date } = {}) {
+  return new MetadataOnlyPiRunner(options.now);
+}
+
+export interface PiSessionFactoryInput {
+  prompt: string;
+  context: PiRuntimeContext;
+  config: PiRuntimeConfig;
+}
+
+export interface PiSessionFactoryResult {
+  events?: unknown[];
+  finalText: string;
+}
+
+export type PiSessionFactory = (input: PiSessionFactoryInput) => Promise<PiSessionFactoryResult>;
+
+export function createPiSdkRunner(options: {
+  config?: Partial<PiRuntimeConfig>;
+  now?: () => Date;
+  sessionFactory?: PiSessionFactory;
+} = {}): PiRuntimeRunner {
+  const config = PiRuntimeConfigSchema.parse({ mode: "sdk", ...options.config });
+  const now = options.now ?? (() => new Date());
+  const sessionFactory = options.sessionFactory ?? createDefaultPiSessionFactory();
+
+  return {
+    async run(context) {
+      const createdAt = now().toISOString();
+      const prompt = composePiPrompt(context);
+      const session = await withTimeout(
+        sessionFactory({ prompt, context, config }),
+        config.timeoutMs,
+        context.session.id,
+        createdAt
+      );
+      if ("timedOut" in session) {
+        return session.result;
+      }
+
+      const events = (session.events ?? [])
+        .map((event, index) =>
+          mapPiEvent(event, {
+            sessionId: context.session.id,
+            sequence: index,
+            createdAt,
+            actor: context.agent ? { type: "agent", id: context.agent.id, name: context.agent.name } : undefined
+          })
+        )
+        .filter((event): event is SessionEvent => event !== undefined);
+      const decoded = decodePiOutcome({
+        sessionId: context.session.id,
+        text: session.finalText,
+        createdAt,
+        eventOffset: events.length
+      });
+
+      return {
+        events: [...events, ...decoded.events],
+        outcome: {
+          ...decoded.outcome,
+          eventsUploaded: events.length + decoded.events.length
+        }
+      };
+    }
+  };
+}
+
+export function composePiPrompt(context: PiRuntimeContext) {
+  const orchestration = context.session.metadata.orchestration;
+  const parts = [
+    "You are running an automomo codebase session.",
+    `Session: ${context.session.id}`,
+    `Codebase: ${context.session.codebaseId}`,
+    context.workItem ? `Work item: ${context.workItem.title}\n${context.workItem.body}` : "Work item: unavailable",
+    context.workItem?.labels.length ? `Labels: ${context.workItem.labels.join(", ")}` : undefined,
+    orchestration ? `Orchestration: ${JSON.stringify(orchestration)}` : undefined,
+    context.agent?.instructions ? `Agent instructions: ${context.agent.instructions}` : undefined,
+    context.agent?.skills.length ? `Skills: ${context.agent.skills.join(", ")}` : undefined,
+    "Return a final fenced JSON object matching this shape:",
+    '{"status":"success|failed|needs_human","summary":"short summary","result":{}}',
+    "Do not include credentials or environment values in the final result."
+  ];
+  return parts.filter(Boolean).join("\n\n");
+}
+
+export function mapPiEvent(
+  event: unknown,
+  input: {
+    sessionId: string;
+    sequence: number;
+    createdAt: string;
+    actor?: SessionEvent["actor"];
+  }
+): SessionEvent | undefined {
+  const record = isRecord(event) ? event : {};
+  const type = typeof record.type === "string" ? record.type : "unknown";
+  const text = typeof record.text === "string" ? record.text : undefined;
+  const name = typeof record.name === "string" ? record.name : undefined;
+  const error = typeof record.error === "string" ? record.error : undefined;
+  const kind =
+    type.includes("tool") ? "tool" : type.includes("error") || error ? "failure" : type.includes("text") ? "text" : "runtime";
+  const summary =
+    kind === "tool"
+      ? `${type.includes("result") ? "Tool result" : "Tool call"}: ${name ?? "tool"}`
+      : kind === "failure"
+        ? error ?? "Pi runtime reported a failure"
+        : text
+          ? text.slice(0, 180)
+          : `Pi event: ${type}`;
+
+  return {
+    id: `event_${input.sessionId}_${input.sequence}`,
+    sessionId: input.sessionId,
+    sequence: input.sequence,
+    kind,
+    summary,
+    detail: text && text.length > 180 ? text : undefined,
+    actor: input.actor,
+    metadata: {
+      piEventType: type
+    },
+    createdAt: input.createdAt
+  };
+}
+
+export function decodePiOutcome(input: {
+  sessionId: string;
+  text: string;
+  createdAt: string;
+  eventOffset?: number;
+}): { outcome: Outcome; events: SessionEvent[] } {
+  const jsonText = extractJson(input.text);
+  if (!jsonText) {
+    return failedDecode(input, "Pi runtime did not return JSON");
+  }
+
+  try {
+    const parsed = OutcomeSchema.omit({ id: true, sessionId: true, eventsUploaded: true, createdAt: true }).parse(
+      JSON.parse(jsonText)
+    );
+    return {
+      outcome: {
+        id: `outcome_${input.sessionId}`,
+        sessionId: input.sessionId,
+        status: parsed.status,
+        summary: parsed.summary,
+        result: parsed.result,
+        eventsUploaded: 0,
+        createdAt: input.createdAt
+      },
+      events: []
+    };
+  } catch (err) {
+    return failedDecode(input, err instanceof Error ? err.message : "Pi runtime returned malformed JSON");
+  }
 }
 
 class MetadataOnlyPiRunner implements PiRuntimeRunner {
@@ -84,4 +250,86 @@ class MetadataOnlyPiRunner implements PiRuntimeRunner {
       }
     };
   }
+}
+
+function extractJson(text: string) {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return text.slice(start, end + 1);
+  }
+  return undefined;
+}
+
+function failedDecode(input: { sessionId: string; createdAt: string; eventOffset?: number }, reason: string) {
+  const sequence = input.eventOffset ?? 0;
+  const event: SessionEvent = {
+    id: `event_${input.sessionId}_decode_failure`,
+    sessionId: input.sessionId,
+    sequence,
+    kind: "failure",
+    summary: "Pi runtime outcome decode failed",
+    detail: reason,
+    metadata: { reason },
+    createdAt: input.createdAt
+  };
+  return {
+    outcome: {
+      id: `outcome_${input.sessionId}`,
+      sessionId: input.sessionId,
+      status: "failed" as const,
+      summary: "Pi runtime returned malformed output",
+      result: { decodeFailure: reason },
+      eventsUploaded: 1,
+      createdAt: input.createdAt
+    },
+    events: [event]
+  };
+}
+
+async function withTimeout(
+  promise: Promise<PiSessionFactoryResult>,
+  timeoutMs: number | undefined,
+  sessionId: string,
+  createdAt: string
+): Promise<PiSessionFactoryResult | { timedOut: true; result: PiRuntimeResult }> {
+  if (!timeoutMs) {
+    return promise;
+  }
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<{ timedOut: true; result: PiRuntimeResult }>((resolve) => {
+        timeout = setTimeout(() => {
+          const failed = failedDecode({ sessionId, createdAt }, `Timed out after ${timeoutMs}ms`);
+          resolve({ timedOut: true, result: failed });
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function createDefaultPiSessionFactory(): PiSessionFactory {
+  return async () => {
+    const mod = await import("@mariozechner/pi-coding-agent");
+    const createAgentSession = (mod as { createAgentSession?: unknown }).createAgentSession;
+    if (typeof createAgentSession !== "function") {
+      throw new Error("Pi Mono SDK createAgentSession is unavailable");
+    }
+    throw new Error("Pi Mono SDK execution requires an injected sessionFactory in this automomo build");
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

@@ -1,5 +1,6 @@
 import {
   DaemonRegistration,
+  DaemonRegistrationResponseSchema,
   Lease,
   LeaseResponseSchema,
   Outcome,
@@ -7,6 +8,7 @@ import {
   RuntimeSchema,
   SessionEvent
 } from "@automomo/protocol";
+import { createHash, createHmac } from "node:crypto";
 
 export interface DaemonApiClientOptions {
   baseUrl: string;
@@ -16,6 +18,13 @@ export interface DaemonApiClientOptions {
 export class DaemonApiClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private identity:
+    | {
+        daemonId: string;
+        runtimeId: string;
+        secret: string;
+      }
+    | undefined;
 
   constructor(options: DaemonApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
@@ -24,7 +33,13 @@ export class DaemonApiClient {
 
   async register(registration: DaemonRegistration): Promise<Runtime> {
     const payload = await this.post("/api/daemon/register", registration);
-    return RuntimeSchema.parse(payload.runtime);
+    const parsed = DaemonRegistrationResponseSchema.parse(payload);
+    this.identity = {
+      daemonId: parsed.daemon.id,
+      runtimeId: parsed.runtime.id,
+      secret: parsed.secret
+    };
+    return RuntimeSchema.parse(parsed.runtime);
   }
 
   async pollLease(runtimeId: string): Promise<Lease | null> {
@@ -41,14 +56,38 @@ export class DaemonApiClient {
   }
 
   private async post(path: string, body: unknown): Promise<any> {
+    const bodyText = JSON.stringify(body);
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body)
+      headers: { "content-type": "application/json", ...this.signedHeaders(path, bodyText) },
+      body: bodyText
     });
     if (!response.ok) {
       throw new Error(`automomo daemon API ${path} failed with ${response.status}`);
     }
     return response.json();
+  }
+
+  private signedHeaders(path: string, bodyText: string): Record<string, string> {
+    if (!this.identity) {
+      return {};
+    }
+    const timestamp = new Date().toISOString();
+    const bodyHash = createHash("sha256").update(bodyText).digest("hex");
+    const canonical = [
+      "POST",
+      path,
+      timestamp,
+      bodyHash,
+      this.identity.daemonId,
+      this.identity.runtimeId
+    ].join("\n");
+    const signature = createHmac("sha256", this.identity.secret).update(canonical).digest("hex");
+    return {
+      "x-automomo-daemon-id": this.identity.daemonId,
+      "x-automomo-runtime-id": this.identity.runtimeId,
+      "x-automomo-timestamp": timestamp,
+      "x-automomo-signature": signature
+    };
   }
 }
