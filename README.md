@@ -1,8 +1,8 @@
 # automomo
 
-`automomo` is a TypeScript-first multi-agent work orchestration system for
-codebases. Humans and AI agents co-work through shared runtimes, session
-timelines, explicit human handoffs, and structured outcomes.
+`automomo` is a room-first human/AI workspace for codebase runtimes.
+Humans and AI agents co-work inside shared rooms through runtime execution,
+session timelines, explicit human handoffs, and structured outcomes.
 
 GitHub can be a source of work items, but the core product is not a GitHub issue
 or pull request review queue. The main nouns are codebases, work items,
