@@ -21,7 +21,8 @@ export function DataRow({
   code,
   meta,
   status,
-  action = "Details"
+  action = "Details",
+  actionHref
 }: {
   tone?: "green" | "grey" | "yellow";
   title: string;
@@ -30,6 +31,7 @@ export function DataRow({
   meta: { label: string; value: string; caption: string }[];
   status: string;
   action?: string;
+  actionHref?: string;
 }) {
   return (
     <article className="schedule-row">
@@ -49,7 +51,13 @@ export function DataRow({
         </div>
       ))}
       <div className="row-actions">
-        <button type="button">{action}</button>
+        {actionHref ? (
+          <a className="row-button" href={actionHref}>
+            {action}
+          </a>
+        ) : (
+          <button type="button">{action}</button>
+        )}
         <span className={`status-pill status-${status.replaceAll("_", "-")}`}>{status.replaceAll("_", " ")}</span>
       </div>
     </article>

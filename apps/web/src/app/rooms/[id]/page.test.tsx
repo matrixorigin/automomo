@@ -2,10 +2,10 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../lib/api", () => ({
+vi.mock("../../../lib/api", () => ({
   getApiClient: () => ({
     getOverview: async () => ({
-      counts: { codebases: 1, workItems: 1, sessions: 0, agents: 1, runtimes: 1 },
+      counts: { codebases: 1, workItems: 1, sessions: 0, agents: 2, runtimes: 1 },
       runtimeHealth: { idle: 0, online: 1, offline: 0, busy: 0, unhealthy: 0 },
       handoffCount: 0,
       daemonCount: 0,
@@ -15,7 +15,8 @@ vi.mock("../../lib/api", () => ({
     listCodebases: async () => [{ id: "codebase_1", name: "automomo" }],
     listAgents: async () => [
       { id: "agent_1", name: "Ralph" },
-      { id: "agent_2", name: "Nova" }
+      { id: "agent_2", name: "Nova" },
+      { id: "agent_3", name: "Kai" }
     ],
     listRooms: async () => ({
       items: [
@@ -40,8 +41,8 @@ vi.mock("../../lib/api", () => ({
       {
         id: "message_1",
         roomId: "room_1",
-        author: { type: "agent", agentId: "agent_1", name: "Ralph" },
-        body: "I am drafting the patch.",
+        author: { type: "human", name: "Operator" },
+        body: "@Ralph please inspect the runtime branch.",
         metadata: {},
         createdAt: "2026-04-20T08:00:00.000Z",
         updatedAt: "2026-04-20T08:00:00.000Z"
@@ -79,30 +80,25 @@ vi.mock("../../lib/api", () => ({
         }
       ],
       page: { limit: 50, offset: 0, total: 1 }
-    }),
-    listWorkItems: async () => ({
-      items: [{ id: "work_1", codebaseId: "codebase_1", title: "Investigate room flow", body: "", source: "manual", status: "ready", priority: "medium", labels: [], metadata: {}, createdAt: "2026-04-20T08:00:00.000Z", updatedAt: "2026-04-20T08:00:00.000Z" }],
-      page: { limit: 50, offset: 0, total: 1 }
-    }),
-    listRuntimes: async () => [{ id: "runtime_1", name: "Local Pi runtime" }]
+    })
   })
 }));
 
-describe("Rooms page", () => {
-  it("renders rooms, membership counts, recent messages, and compact create controls", async () => {
-    const { default: RoomsPage } = await import("./page");
-    const html = renderToStaticMarkup(await RoomsPage());
+describe("Room detail page", () => {
+  it("renders a room workspace with chat, mentions, work, and agent join controls", async () => {
+    const { default: RoomDetailPage } = await import("./page");
+    const html = renderToStaticMarkup(await RoomDetailPage({ params: Promise.resolve({ id: "room_1" }) }));
 
-    expect(html).toContain("Rooms");
     expect(html).toContain("Shared room");
-    expect(html).toContain("2 agents");
-    expect(html).toContain("Room work");
+    expect(html).toContain("Room chat");
+    expect(html).toContain("@Ralph");
+    expect(html).toContain("@all");
+    expect(html).toContain("Send message");
+    expect(html).toContain("Add agent");
+    expect(html).toContain("Nova");
+    expect(html).toContain("Kai");
+    expect(html).toContain("New room work");
     expect(html).toContain("Investigate room flow");
-    expect(html).toContain("ready");
-    expect(html).toContain("1 work item");
-    expect(html).toContain('href="/rooms/room_1"');
-    expect(html).toContain("I am drafting the patch.");
-    expect(html).toContain("Draft patch");
-    expect(html).toContain('data-json-endpoint="/api/rooms"');
+    expect(html).toContain("Room subtasks");
   });
 });

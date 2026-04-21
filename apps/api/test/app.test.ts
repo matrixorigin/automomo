@@ -132,6 +132,15 @@ describe("automomo API", () => {
     );
     expect(roomMessageRes.status).toBe(201);
 
+    const invalidMessageRes = await app.request(
+      "/api/rooms/room_1/messages",
+      json({
+        author: { type: "human" },
+        body: "Missing author name"
+      })
+    );
+    expect(invalidMessageRes.status).toBe(400);
+
     const roomTaskRes = await app.request(
       "/api/rooms/room_1/tasks",
       json({

@@ -183,7 +183,8 @@ describe("operational web components", () => {
 
     expect(html).toContain("session_1");
     expect(html).toContain("Human input requested");
-    expect(html).toContain("Resume");
+    expect(html).toContain("Claim");
+    expect(html).toContain("Approve");
   });
 });
 

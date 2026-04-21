@@ -73,6 +73,7 @@ export default async function RoomsPage() {
                 }
               ]}
               action="Open"
+              actionHref={`/rooms/${room.id}`}
             />
           );
         })}

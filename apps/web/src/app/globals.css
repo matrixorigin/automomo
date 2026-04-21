@@ -446,6 +446,162 @@ a {
   padding: 20px 30px 36px;
 }
 
+.room-hero {
+  display: grid;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 22px 30px 10px;
+}
+
+.room-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.back-link {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.42fr);
+  gap: 0;
+}
+
+.room-primary {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+.room-side {
+  min-width: 0;
+}
+
+.room-side .schedule {
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+.chat-composer {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.3fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+}
+
+.chat-composer label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-composer label span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-composer input,
+.chat-composer textarea {
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--white);
+  padding: 8px 10px;
+}
+
+.chat-composer .wide {
+  min-width: 0;
+}
+
+.chat-composer button,
+.mention-bar button {
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.mention-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mention-bar button {
+  background: #fbffd3;
+  font-size: 12px;
+}
+
+.message-thread {
+  display: grid;
+}
+
+.message-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.28fr) minmax(0, 1fr);
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+}
+
+.message-row strong,
+.message-row span {
+  display: block;
+}
+
+.message-row span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.message-row p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.message-agent p {
+  font-weight: 700;
+}
+
+.agent-roster {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+}
+
+.agent-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.agent-chip span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
 .floor-heading {
   display: flex;
   align-items: center;
@@ -549,13 +705,20 @@ a {
   gap: 8px;
 }
 
-.row-actions button {
+.row-actions button,
+.row-button {
   min-width: 72px;
   min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--white);
+  color: var(--ink);
   cursor: pointer;
+  font-size: 13px;
+  padding: 0 10px;
 }
 
 .status-pill {
@@ -697,6 +860,19 @@ a {
   grid-column: span 2;
 }
 
+.compact-editor {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.room-side .editor-panel {
+  grid-template-columns: 1fr;
+}
+
+.room-side .compact-editor {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .toggle-row {
   display: flex !important;
   align-items: center;
@@ -777,7 +953,9 @@ a {
   .totals,
   .settings-grid,
   .editor-panel,
-  .detail-panel dl {
+  .detail-panel dl,
+  .room-grid,
+  .chat-composer {
     grid-template-columns: 1fr;
   }
 
@@ -799,5 +977,13 @@ a {
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 12px 0;
+  }
+
+  .room-primary {
+    border-right: 0;
+  }
+
+  .message-row {
+    grid-template-columns: 1fr;
   }
 }

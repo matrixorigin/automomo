@@ -1097,6 +1097,17 @@ export function createApp(env: AppEnv = {}) {
     return c.json({ apiKey, token }, 201);
   });
 
+  app.onError((err, c) => {
+    if (err instanceof z.ZodError) {
+      return c.json({ error: "invalid request body", issues: err.issues }, 400);
+    }
+    if (err instanceof SyntaxError) {
+      return c.json({ error: "invalid JSON" }, 400);
+    }
+    console.error(err);
+    return c.json({ error: "internal server error" }, 500);
+  });
+
   return app;
 }
 

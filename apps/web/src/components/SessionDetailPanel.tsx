@@ -5,6 +5,7 @@ import { SessionTimeline } from "./SessionTimeline";
 
 export function SessionDetailPanel({ detail }: { detail: SessionDetailResponse }) {
   const participants = detail.session.participants.map((item) => item.name).join(" + ") || "No participants";
+  const latestHandoff = detail.handoffs.at(-1);
   return (
     <section className="detail-panel" id="outcomes">
       <header>
@@ -26,7 +27,7 @@ export function SessionDetailPanel({ detail }: { detail: SessionDetailResponse }
           <dd>{detail.outcome?.summary ?? "Pending"}</dd>
         </div>
       </dl>
-      <HandoffControls sessionId={detail.session.id} />
+      <HandoffControls sessionId={detail.session.id} latestStatus={latestHandoff?.status} />
       <div className="handoff-list">
         {detail.handoffs.map((handoff) => (
           <span key={handoff.id}>
