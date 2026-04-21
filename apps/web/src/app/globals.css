@@ -878,6 +878,98 @@ a {
   font-size: 12px;
 }
 
+.room-sessions-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.room-sessions-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.room-session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+}
+
+.room-session-row:last-child {
+  border-bottom: 0;
+}
+
+.room-session-row.is-selected {
+  background: var(--surface-subtle);
+}
+
+.room-session-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.room-session-row-main strong {
+  display: block;
+  font-size: 13px;
+}
+
+.room-session-row-main span,
+.room-session-row-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-session-row-meta {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+
+.room-session-status-badge {
+  text-transform: none;
+}
+
+.room-session-detail-slot {
+  min-width: 0;
+}
+
+.room-session-inline-handoff {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  padding: 12px;
+}
+
+.room-session-inline-handoff header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-session-inline-handoff h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.room-session-inline-handoff span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-session-detail-panel.detail-panel {
+  margin: 0;
+  border-top: 0;
+}
+
 .room-hero p {
   max-width: 760px;
   margin: 0;
@@ -1439,6 +1531,7 @@ a {
   .room-work-board-columns,
   .detail-panel dl,
   .room-grid,
+  .room-sessions-panel,
   .chat-composer {
     grid-template-columns: 1fr;
   }

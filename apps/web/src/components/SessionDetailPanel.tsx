@@ -3,11 +3,11 @@ import React from "react";
 import { HandoffControls } from "./HandoffControls";
 import { SessionTimeline } from "./SessionTimeline";
 
-export function SessionDetailPanel({ detail }: { detail: SessionDetailResponse }) {
+export function SessionDetailPanel({ detail, className }: { detail: SessionDetailResponse; className?: string }) {
   const participants = detail.session.participants.map((item) => item.name).join(" + ") || "No participants";
   const latestHandoff = detail.handoffs.at(-1);
   return (
-    <section className="detail-panel" id="outcomes">
+    <section className={["detail-panel", className].filter(Boolean).join(" ")} id="outcomes">
       <header>
         <small>{detail.session.status.replaceAll("_", " ")}</small>
         <h2>{detail.workItem?.title ?? detail.session.id}</h2>

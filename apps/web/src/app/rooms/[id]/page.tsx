@@ -8,6 +8,7 @@ import { RoomAgentJoinForm } from "../../../components/RoomAgentJoinForm";
 import { RoomChatComposer } from "../../../components/RoomChatComposer";
 import { RoomHeader } from "../../../components/RoomHeader";
 import { RoomRuntimePresence } from "../../../components/RoomRuntimePresence";
+import { RoomSessionsPanel } from "../../../components/RoomSessionsPanel";
 import { RoomWorkBoard } from "../../../components/RoomWorkBoard";
 import { RoomWorkspace } from "../../../components/RoomWorkspace";
 import { getApiClient } from "../../../lib/api";
@@ -120,16 +121,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                 Room sessions <span>{sessions.length}</span>
               </h2>
             </div>
-            {sessions.length === 0 ? <EmptyState title="No sessions yet" body="Sessions attached to this room will appear here." /> : null}
-            {sessions.map((session) => (
-              <article className="session-row" key={session.id}>
-                <div>
-                  <strong>{session.id.toUpperCase()}</strong>
-                  <span>{session.status}</span>
-                </div>
-                <p>Runtime: {session.runtimeId ?? "unassigned"}</p>
-              </article>
-            ))}
+            <RoomSessionsPanel sessions={sessions} agents={agents} runtimes={runtimes} workItems={roomWorkItems.items} />
           </section>
         }
         outcomesContent={
