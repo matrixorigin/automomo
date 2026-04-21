@@ -9,6 +9,7 @@ import { RoomChatComposer } from "../../../components/RoomChatComposer";
 import { RoomHeader } from "../../../components/RoomHeader";
 import { RoomRuntimePresence } from "../../../components/RoomRuntimePresence";
 import { RoomSessionsPanel } from "../../../components/RoomSessionsPanel";
+import { RoomOutcomesPanel } from "../../../components/RoomOutcomesPanel";
 import { RoomWorkBoard } from "../../../components/RoomWorkBoard";
 import { RoomWorkspace } from "../../../components/RoomWorkspace";
 import { getApiClient } from "../../../lib/api";
@@ -48,7 +49,10 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   const messages = [...roomMessages].sort(byCreatedAtAsc);
   const tasks = [...roomTasks].sort(byCreatedAtDesc);
   const sessions = [...roomSessions.items].sort(byCreatedAtDesc);
-  const outcomes = sessions.filter((session) => Boolean(session.outcomeId));
+  const sessionIdsWithOutcomes = sessions.filter((session) => session.outcomeId).map((session) => session.id);
+  const outcomeDetails = (
+    await Promise.all(sessionIdsWithOutcomes.map((sessionId) => api.getSession(sessionId)))
+  ).filter((detail) => detail.outcome);
 
   return (
     <AppShell active="Rooms" activeRoomId={room.id} overview={overview} rooms={rooms.items} agents={agents}>
@@ -128,19 +132,10 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
           <section className="schedule">
             <div className="floor-heading">
               <h2>
-                Room outcomes <span>{outcomes.length}</span>
+                Room outcomes <span>{outcomeDetails.length}</span>
               </h2>
             </div>
-            {outcomes.length === 0 ? <EmptyState title="No outcomes yet" body="Session outcomes will be summarized here." /> : null}
-            {outcomes.map((session) => (
-              <article className="session-row" key={session.id}>
-                <div>
-                  <strong>{session.id.toUpperCase()}</strong>
-                  <span>{session.outcomeId}</span>
-                </div>
-                <p>Status: {session.status}</p>
-              </article>
-            ))}
+            <RoomOutcomesPanel outcomes={outcomeDetails} />
           </section>
         }
       />
