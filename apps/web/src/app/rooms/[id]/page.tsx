@@ -67,19 +67,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                 Room chat <span>{messages.length}</span>
               </h2>
             </div>
-            <RoomChatComposer roomId={room.id} agents={joinedAgents} />
-            <div className="message-thread" aria-label="Room messages">
-              {messages.length === 0 ? <EmptyState title="No room messages" body="Use the composer to steer agents with @mentions." /> : null}
-              {messages.map((message) => (
-                <article className={`message-row message-${message.author.type}`} key={message.id}>
-                  <div>
-                    <strong>{formatAuthor(message.author)}</strong>
-                    <span>{message.createdAt}</span>
-                  </div>
-                  <p>{message.body}</p>
-                </article>
-              ))}
-            </div>
+            <RoomChatComposer roomId={room.id} agents={joinedAgents} initialMessages={messages} />
             <div className="room-tab-support">
               <div className="floor-heading">
                 <h2>
@@ -189,10 +177,6 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
       />
     </AppShell>
   );
-}
-
-function formatAuthor(author: { type: "human" | "agent" | "system"; name: string }) {
-  return author.type === "agent" ? `Agent ${author.name}` : author.type === "human" ? `Human ${author.name}` : author.name;
 }
 
 function byCreatedAtAsc<T extends { createdAt: string }>(a: T, b: T) {

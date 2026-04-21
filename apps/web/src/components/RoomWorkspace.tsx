@@ -37,9 +37,10 @@ export function RoomWorkspace({
         return (
           <section
             key={tab.id}
-            className="room-workspace-panel"
+            className={`room-workspace-panel room-workspace-panel-${tab.id}`}
             role="tabpanel"
             id={`${tab.id}-panel`}
+            data-room-tab={tab.id}
             aria-hidden={!isActive}
             hidden={!isActive}
           >

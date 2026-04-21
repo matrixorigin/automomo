@@ -816,6 +816,51 @@ a {
   min-width: 0;
 }
 
+.mention-textarea {
+  position: relative;
+}
+
+.mention-textarea-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.mention-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 0;
+  margin: 6px 0 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--white);
+  list-style: none;
+  padding: 4px;
+}
+
+.mention-dropdown li {
+  margin: 0;
+}
+
+.mention-dropdown button {
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.mention-dropdown button.is-active {
+  background: #fbffd3;
+}
+
 .chat-composer button,
 .mention-bar button {
   min-height: 32px;
@@ -869,8 +914,21 @@ a {
   line-height: 1.45;
 }
 
+.mention-token {
+  display: inline-block;
+  border-radius: 4px;
+  background: #fbffd3;
+  padding: 0 2px;
+}
+
 .message-agent p {
   font-weight: 700;
+}
+
+.chat-error {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 12px;
 }
 
 .agent-roster {

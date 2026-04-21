@@ -122,7 +122,7 @@ vi.mock("../../../lib/api", () => ({
 }));
 
 describe("Room detail page", () => {
-  it("renders a room workspace header and tabs with legacy controls inside tab content", async () => {
+  it("renders a room workspace header and tabs with room chat stream controls", async () => {
     const { default: RoomDetailPage } = await import("./page");
     const html = renderToStaticMarkup(await RoomDetailPage({ params: Promise.resolve({ id: "room_1" }) }));
 
@@ -133,8 +133,9 @@ describe("Room detail page", () => {
     expect(html).toContain("Board");
     expect(html).toContain("Sessions");
     expect(html).toContain("Outcomes");
+    expect(html).toContain("Human Operator");
+    expect(html).toContain("mention-token");
     expect(html).toContain("@Ralph");
-    expect(html).toContain("@all");
     expect(html).toContain("Send message");
     expect(html).toContain("Add agent");
     expect(html).toContain("Nova");

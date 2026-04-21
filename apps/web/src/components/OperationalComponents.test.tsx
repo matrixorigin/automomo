@@ -13,6 +13,7 @@ import { StatusStrip } from "./StatusStrip";
 import { buildAgentPayload } from "./AgentEditor";
 import { buildRuntimePayload } from "./RuntimeEditor";
 import { AgentAvatar } from "./AgentAvatar";
+import { RoomChatStream } from "./RoomChatStream";
 
 const now = "2026-04-20T08:00:00.000Z";
 
@@ -202,6 +203,51 @@ describe("operational web components", () => {
     expect(html).toContain("title=\"Agent Ralph (robot)\"");
     expect(html).toContain("background:#3B82F6");
     expect(html).toContain(">R<");
+  });
+
+  it("renders chat stream oldest-first with author labels and mention tokens", () => {
+    const html = renderToStaticMarkup(
+      <RoomChatStream
+        roomId="room_1"
+        agentNames={["Ralph", "Nova"]}
+        initialMessages={[
+          {
+            id: "message_2",
+            roomId: "room_1",
+            author: { type: "agent", agentId: "agent_1", name: "Ralph" },
+            body: "@Operator pulled latest branch.",
+            metadata: {},
+            createdAt: "2026-04-20T08:01:00.000Z",
+            updatedAt: "2026-04-20T08:01:00.000Z"
+          },
+          {
+            id: "message_1",
+            roomId: "room_1",
+            author: { type: "human", name: "Operator" },
+            body: "@Ralph please inspect runtime changes.",
+            metadata: {},
+            createdAt: "2026-04-20T08:00:00.000Z",
+            updatedAt: "2026-04-20T08:00:00.000Z"
+          },
+          {
+            id: "message_3",
+            roomId: "room_1",
+            author: { type: "system", name: "Runtime daemon" },
+            body: "Health check complete.",
+            metadata: {},
+            createdAt: "2026-04-20T08:02:00.000Z",
+            updatedAt: "2026-04-20T08:02:00.000Z"
+          }
+        ]}
+      />
+    );
+
+    expect(html).toContain("Human Operator");
+    expect(html).toContain("Agent Ralph");
+    expect(html).toContain("Runtime daemon");
+    expect(html).toContain("mention-token");
+    expect(html.indexOf("@Ralph please inspect runtime changes.")).toBeLessThan(html.indexOf("@Operator pulled latest branch."));
+    expect(html).not.toContain("window.location.reload");
   });
 });
 
