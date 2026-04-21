@@ -10,6 +10,16 @@
   --green-black: #202b22;
   --danger: #b3261e;
   --radius: 7px;
+  --surface: var(--white);
+  --surface-subtle: var(--soft);
+  --surface-rail: var(--rail);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --border: var(--line);
+  --accent: var(--yellow);
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --sidebar-width: 292px;
   font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -55,10 +65,214 @@ a {
   text-decoration: none;
 }
 
+.ui-button,
+.ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ui-button {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.ui-button.is-primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.ui-button.is-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ui-button.is-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ui-button.is-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.ui-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.ui-icon-button.is-primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.ui-icon-button.is-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ui-icon-button.is-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ui-icon-button.is-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 8px;
+}
+
+.ui-badge.tone-neutral {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+}
+
+.ui-badge.tone-green {
+  background: #e2f0e6;
+  color: #1f5f3a;
+}
+
+.ui-badge.tone-yellow {
+  background: #fff4cf;
+  color: #8a6200;
+}
+
+.ui-badge.tone-red {
+  background: #fde6e5;
+  color: #8d231d;
+}
+
+.ui-badge.tone-blue {
+  background: #e5efff;
+  color: #234e9f;
+}
+
+.ui-avatar {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ui-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  padding: 2px;
+}
+
+.ui-tab {
+  min-height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.ui-tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.ui-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.ui-panel-header {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+}
+
+.ui-panel-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ui-panel-body {
+  padding: 12px;
+}
+
+.ui-field {
+  display: grid;
+  gap: 6px;
+}
+
+.ui-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ui-field-hint,
+.ui-field-error {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ui-field-hint {
+  color: var(--text-muted);
+}
+
+.ui-field-error {
+  color: var(--danger);
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 292px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   background: var(--white);
 }
 
