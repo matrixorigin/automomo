@@ -1,6 +1,7 @@
-import { AppShell } from "@/components/AppShell";
-import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { getApiClient } from "@/lib/api";
+import { AppShell } from "../../components/AppShell";
+import { WorkspaceHeader } from "../../components/WorkspaceHeader";
+import { getApiClient } from "../../lib/api";
+import React from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function SettingsPage() {
 
   return (
     <AppShell active="Settings" overview={overview} rooms={rooms.items} agents={agents}>
-      <WorkspaceHeader section="Settings" title="Workspace settings" action="Save" />
+      <WorkspaceHeader section="Settings" title="Setup and configuration" />
       <section className="settings-grid">
         <label>
           <span>API base URL</span>

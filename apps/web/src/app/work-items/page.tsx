@@ -23,18 +23,7 @@ export default async function WorkItemsPage() {
   const workGroups = groupWorkByRoom(workItems.items, rooms.items);
   return (
     <AppShell active="Work Items" overview={overview} rooms={rooms.items} agents={agents}>
-      <WorkspaceHeader section="Work Items" title="Across rooms" action="New item" />
-      <div className="mode-row" aria-label="Work item controls">
-        <div className="tabs" role="tablist" aria-label="Status filter">
-          <button className="tab active" type="button">All</button>
-          <button className="tab" type="button">Ready</button>
-          <button className="tab" type="button">Needs Human</button>
-        </div>
-        <label className="search">
-          <span aria-hidden="true" />
-          <input type="search" placeholder="Search work" />
-        </label>
-      </div>
+      <WorkspaceHeader section="Work Items" title="Across rooms" action={{ label: "Open rooms", href: "/rooms" }} />
       <Totals
         items={[
           { label: "Urgent", value: workItems.items.filter((item) => item.priority === "urgent").length, caption: "needs routing" },
@@ -60,7 +49,7 @@ export default async function WorkItemsPage() {
                 { label: "Priority", value: item.priority, caption: item.source },
                 { label: "Room", value: group.title, caption: item.labels[0] ?? item.codebaseId }
               ]}
-              action={item.roomId ? "Open room" : "View rooms"}
+              action={item.roomId ? "Open room workspace" : "View rooms"}
               actionHref={item.roomId ? `/rooms/${item.roomId}` : "/rooms"}
             />
           ))}

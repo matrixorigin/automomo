@@ -73,5 +73,7 @@ describe("Work Items page", () => {
     expect(html).toContain("Room work");
     expect(html).toContain("Global work");
     expect(html).toContain('href="/rooms/room_1"');
+    expect(html).not.toContain("Work item controls");
+    expect(html).toContain("Open room workspace");
   });
 });

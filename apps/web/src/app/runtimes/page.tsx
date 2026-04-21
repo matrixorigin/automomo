@@ -1,10 +1,11 @@
-import { AppShell } from "@/components/AppShell";
-import { DataRow, DataRows } from "@/components/DataRows";
-import { EmptyState } from "@/components/EmptyState";
-import { RuntimeEditor } from "@/components/RuntimeEditor";
-import { Totals } from "@/components/Totals";
-import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { getApiClient } from "@/lib/api";
+import { AppShell } from "../../components/AppShell";
+import { DataRow, DataRows } from "../../components/DataRows";
+import { EmptyState } from "../../components/EmptyState";
+import { RuntimeEditor } from "../../components/RuntimeEditor";
+import { Totals } from "../../components/Totals";
+import { WorkspaceHeader } from "../../components/WorkspaceHeader";
+import { getApiClient } from "../../lib/api";
+import React from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function RuntimesPage() {
   ]);
   return (
     <AppShell active="Runtimes" overview={overview} rooms={rooms.items} agents={agents}>
-      <WorkspaceHeader section="Runtimes" title="Reusable code and environment" action="Pair daemon" />
+      <WorkspaceHeader section="Runtimes" title="Reusable code environments" />
       <section className="schedule">
         <RuntimeEditor />
       </section>
@@ -30,7 +31,7 @@ export default async function RuntimesPage() {
         ]}
       />
       <DataRows title="Runtime inventory" count={runtimes.length}>
-        {runtimes.length === 0 ? <EmptyState title="No runtimes" body="Pair a daemon or add a local runtime provider." /> : null}
+        {runtimes.length === 0 ? <EmptyState title="No runtimes" body="Add reusable code environments for room sessions." /> : null}
         {runtimes.map((runtime) => (
           <DataRow
             key={runtime.id}
