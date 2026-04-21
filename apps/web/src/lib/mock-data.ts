@@ -2,6 +2,10 @@ import {
   Agent,
   Codebase,
   OrchestrationRule,
+  Room,
+  RoomAgent,
+  RoomMessage,
+  RoomTask,
   Runtime,
   Session,
   SessionEvent,
@@ -140,10 +144,109 @@ export const workItems: WorkItem[] = [
   }
 ];
 
+export const rooms: Room[] = [
+  {
+    id: "room_shared",
+    codebaseId: "codebase_automomo",
+    name: "Shared room",
+    description: "Working room for implementation and review",
+    status: "active",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: "room_handoff",
+    codebaseId: "codebase_automomo",
+    name: "Human checkpoint",
+    description: "Room for questions and approvals",
+    status: "active",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  }
+];
+
+export const roomAgents: RoomAgent[] = [
+  {
+    id: "room_agent_1",
+    roomId: "room_shared",
+    agentId: "agent_ralph",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: "room_agent_2",
+    roomId: "room_shared",
+    agentId: "agent_nova",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: "room_agent_3",
+    roomId: "room_handoff",
+    agentId: "agent_ralph",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  }
+];
+
+export const roomMessages: RoomMessage[] = [
+  {
+    id: "room_message_1",
+    roomId: "room_shared",
+    author: { type: "agent", agentId: "agent_ralph", name: "Ralph" },
+    body: "I am mapping the reconnect flow and keeping the room updated.",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: "room_message_2",
+    roomId: "room_shared",
+    author: { type: "system", name: "Scheduler" },
+    body: "Nova picked up the compact UI pass.",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  }
+];
+
+export const roomTasks: RoomTask[] = [
+  {
+    id: "room_task_1",
+    roomId: "room_shared",
+    title: "Draft patch",
+    body: "Break the room work into API, store, and UI passes.",
+    status: "running",
+    assignedAgentId: "agent_nova",
+    workItemId: "work_987",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: "room_task_2",
+    roomId: "room_shared",
+    title: "Verify membership counts",
+    body: "Keep the room roster aligned with the agent list.",
+    status: "open",
+    assignedAgentId: "agent_ralph",
+    workItemId: "work_291",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  }
+];
+
 export const sessions: Session[] = [
   {
     id: "session_alpha",
     codebaseId: "codebase_automomo",
+    roomId: "room_shared",
     workItemId: "work_1042",
     agentId: "agent_ralph",
     runtimeId: "runtime_local_pi",
@@ -160,6 +263,7 @@ export const sessions: Session[] = [
   {
     id: "session_beta",
     codebaseId: "codebase_automomo",
+    roomId: "room_handoff",
     workItemId: "work_291",
     agentId: "agent_nova",
     runtimeId: "runtime_daemon_box",

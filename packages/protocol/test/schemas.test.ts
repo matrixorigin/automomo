@@ -117,6 +117,61 @@ describe("automomo protocol schemas", () => {
     expect(overview.recentEvents[0]?.metadata).toEqual({});
   });
 
+  it("models room collaboration nouns and room-linked sessions", async () => {
+    const protocol = await import("../src/index");
+
+    const room = protocol.RoomSchema.parse({
+      id: "room_1",
+      codebaseId: "codebase_1",
+      name: "Shared room",
+      createdAt: now,
+      updatedAt: now
+    });
+    const roomAgent = protocol.RoomAgentSchema.parse({
+      id: "room_agent_1",
+      roomId: "room_1",
+      agentId: "agent_1",
+      createdAt: now,
+      updatedAt: now
+    });
+    const message = protocol.RoomMessageSchema.parse({
+      id: "message_1",
+      roomId: "room_1",
+      author: { type: "agent", agentId: "agent_1", name: "Ralph" },
+      body: "Working the patch together.",
+      createdAt: now,
+      updatedAt: now
+    });
+    const task = protocol.RoomTaskSchema.parse({
+      id: "task_1",
+      roomId: "room_1",
+      title: "Draft patch",
+      assignedAgentId: "agent_1",
+      workItemId: "work_1",
+      createdAt: now,
+      updatedAt: now
+    });
+    const session = protocol.SessionSchema.parse({
+      id: "session_1",
+      codebaseId: "codebase_1",
+      roomId: "room_1",
+      createdAt: now,
+      updatedAt: now
+    });
+    const rooms = protocol.RoomListResponseSchema.parse({
+      items: [room],
+      page: { limit: 50, offset: 0, total: 1 }
+    });
+
+    expect(room.status).toBe("active");
+    expect(room.metadata).toEqual({});
+    expect(roomAgent.metadata).toEqual({});
+    expect(message.author.type).toBe("agent");
+    expect(task.status).toBe("open");
+    expect(session.roomId).toBe("room_1");
+    expect(rooms.items[0]?.id).toBe("room_1");
+  });
+
   it("defaults list filters and rejects invalid enum values", () => {
     expect(WorkItemListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
     expect(SessionListQuerySchema.parse({ limit: "200", offset: "10" })).toMatchObject({ limit: 200, offset: 10 });

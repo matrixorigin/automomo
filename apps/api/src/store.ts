@@ -22,6 +22,16 @@ import {
   OrchestrationRuleSchema,
   Outcome,
   OutcomeSchema,
+  Room,
+  RoomAgent,
+  RoomAgentSchema,
+  RoomListQuery,
+  RoomListResponse,
+  RoomMessage,
+  RoomMessageSchema,
+  RoomSchema,
+  RoomTask,
+  RoomTaskSchema,
   Runtime,
   RuntimeSchema,
   Session,
@@ -64,6 +74,16 @@ export class LeaseError extends Error {
 export interface ControlPlaneStore {
   saveCodebase(codebase: Codebase): Codebase;
   listCodebases(): Codebase[];
+  saveRoom(room: Room): Room;
+  listRooms(): Room[];
+  listRooms(query: RoomListQuery): RoomListResponse;
+  getRoom(id: string): Room | undefined;
+  saveRoomAgent(roomAgent: RoomAgent): RoomAgent;
+  listRoomAgents(roomId: string): RoomAgent[];
+  saveRoomMessage(message: RoomMessage): RoomMessage;
+  listRoomMessages(roomId: string): RoomMessage[];
+  saveRoomTask(task: RoomTask): RoomTask;
+  listRoomTasks(roomId: string): RoomTask[];
   saveWorkItem(item: WorkItem): WorkItem;
   listWorkItems(): WorkItem[];
   listWorkItems(query: WorkItemListQuery): WorkItemListResponse;
@@ -109,6 +129,10 @@ export interface ControlPlaneStore {
 
 export class MemoryStore implements ControlPlaneStore {
   readonly codebases = new Map<string, Codebase>();
+  readonly rooms = new Map<string, Room>();
+  readonly roomAgents = new Map<string, RoomAgent>();
+  readonly roomMessages = new Map<string, RoomMessage>();
+  readonly roomTasks = new Map<string, RoomTask>();
   readonly workItems = new Map<string, WorkItem>();
   readonly orchestrationRules = new Map<string, OrchestrationRule>();
   readonly sessions = new Map<string, Session>();
@@ -131,6 +155,53 @@ export class MemoryStore implements ControlPlaneStore {
 
   listCodebases() {
     return [...this.codebases.values()];
+  }
+
+  saveRoom(room: Room) {
+    const parsed = RoomSchema.parse(room);
+    this.rooms.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  listRooms(): Room[];
+  listRooms(query: RoomListQuery): RoomListResponse;
+  listRooms(query?: RoomListQuery) {
+    const items = sortByCreatedAtAndId([...this.rooms.values()]);
+    return query ? paginate(filterRooms(items, query), query) : items;
+  }
+
+  getRoom(id: string) {
+    return this.rooms.get(id);
+  }
+
+  saveRoomAgent(roomAgent: RoomAgent) {
+    const parsed = RoomAgentSchema.parse(roomAgent);
+    this.roomAgents.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  listRoomAgents(roomId: string) {
+    return sortByCreatedAtAndId([...this.roomAgents.values()].filter((roomAgent) => roomAgent.roomId === roomId));
+  }
+
+  saveRoomMessage(message: RoomMessage) {
+    const parsed = RoomMessageSchema.parse(message);
+    this.roomMessages.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  listRoomMessages(roomId: string) {
+    return sortByCreatedAtAndId([...this.roomMessages.values()].filter((message) => message.roomId === roomId));
+  }
+
+  saveRoomTask(task: RoomTask) {
+    const parsed = RoomTaskSchema.parse(task);
+    this.roomTasks.set(parsed.id, parsed);
+    return parsed;
+  }
+
+  listRoomTasks(roomId: string) {
+    return sortByCreatedAtAndId([...this.roomTasks.values()].filter((task) => task.roomId === roomId));
   }
 
   saveWorkItem(item: WorkItem) {
@@ -422,6 +493,10 @@ export interface SQLiteStoreOptions {
 }
 
 type CodebaseRow = typeof schema.codebases.$inferSelect;
+type RoomRow = typeof schema.rooms.$inferSelect;
+type RoomAgentRow = typeof schema.roomAgents.$inferSelect;
+type RoomMessageRow = typeof schema.roomMessages.$inferSelect;
+type RoomTaskRow = typeof schema.roomTasks.$inferSelect;
 type WorkItemRow = typeof schema.workItems.$inferSelect;
 type OrchestrationRuleRow = typeof schema.orchestrationRules.$inferSelect;
 type SessionRow = typeof schema.sessions.$inferSelect;
@@ -487,6 +562,171 @@ export class SQLiteStore implements ControlPlaneStore {
 
   listCodebases() {
     return this.db.select().from(schema.codebases).orderBy(asc(schema.codebases.createdAt)).all().map(rowToCodebase);
+  }
+
+  saveRoom(room: Room) {
+    const parsed = RoomSchema.parse(room);
+    this.db
+      .insert(schema.rooms)
+      .values({
+        id: parsed.id,
+        codebaseId: parsed.codebaseId,
+        name: parsed.name,
+        description: parsed.description,
+        status: parsed.status,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.rooms.id,
+        set: {
+          codebaseId: parsed.codebaseId,
+          name: parsed.name,
+          description: parsed.description,
+          status: parsed.status,
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  listRooms(): Room[];
+  listRooms(query: RoomListQuery): RoomListResponse;
+  listRooms(query?: RoomListQuery) {
+    const items = this.db
+      .select()
+      .from(schema.rooms)
+      .orderBy(asc(schema.rooms.createdAt), asc(schema.rooms.id))
+      .all()
+      .map(rowToRoom);
+    return query ? paginate(filterRooms(items, query), query) : items;
+  }
+
+  getRoom(id: string) {
+    const row = this.db.select().from(schema.rooms).where(eq(schema.rooms.id, id)).get();
+    return row ? rowToRoom(row) : undefined;
+  }
+
+  saveRoomAgent(roomAgent: RoomAgent) {
+    const parsed = RoomAgentSchema.parse(roomAgent);
+    this.db
+      .insert(schema.roomAgents)
+      .values({
+        id: parsed.id,
+        roomId: parsed.roomId,
+        agentId: parsed.agentId,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.roomAgents.id,
+        set: {
+          roomId: parsed.roomId,
+          agentId: parsed.agentId,
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  listRoomAgents(roomId: string) {
+    return this.db
+      .select()
+      .from(schema.roomAgents)
+      .where(eq(schema.roomAgents.roomId, roomId))
+      .orderBy(asc(schema.roomAgents.createdAt), asc(schema.roomAgents.id))
+      .all()
+      .map(rowToRoomAgent);
+  }
+
+  saveRoomMessage(message: RoomMessage) {
+    const parsed = RoomMessageSchema.parse(message);
+    this.db
+      .insert(schema.roomMessages)
+      .values({
+        id: parsed.id,
+        roomId: parsed.roomId,
+        authorJson: stringifyJson(parsed.author),
+        body: parsed.body,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.roomMessages.id,
+        set: {
+          roomId: parsed.roomId,
+          authorJson: stringifyJson(parsed.author),
+          body: parsed.body,
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  listRoomMessages(roomId: string) {
+    return this.db
+      .select()
+      .from(schema.roomMessages)
+      .where(eq(schema.roomMessages.roomId, roomId))
+      .orderBy(asc(schema.roomMessages.createdAt), asc(schema.roomMessages.id))
+      .all()
+      .map(rowToRoomMessage);
+  }
+
+  saveRoomTask(task: RoomTask) {
+    const parsed = RoomTaskSchema.parse(task);
+    this.db
+      .insert(schema.roomTasks)
+      .values({
+        id: parsed.id,
+        roomId: parsed.roomId,
+        title: parsed.title,
+        body: parsed.body,
+        status: parsed.status,
+        assignedAgentId: parsed.assignedAgentId,
+        workItemId: parsed.workItemId,
+        metadataJson: stringifyJson(parsed.metadata),
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt
+      })
+      .onConflictDoUpdate({
+        target: schema.roomTasks.id,
+        set: {
+          roomId: parsed.roomId,
+          title: parsed.title,
+          body: parsed.body,
+          status: parsed.status,
+          assignedAgentId: parsed.assignedAgentId,
+          workItemId: parsed.workItemId,
+          metadataJson: stringifyJson(parsed.metadata),
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt
+        }
+      })
+      .run();
+    return parsed;
+  }
+
+  listRoomTasks(roomId: string) {
+    return this.db
+      .select()
+      .from(schema.roomTasks)
+      .where(eq(schema.roomTasks.roomId, roomId))
+      .orderBy(asc(schema.roomTasks.createdAt), asc(schema.roomTasks.id))
+      .all()
+      .map(rowToRoomTask);
   }
 
   saveWorkItem(item: WorkItem) {
@@ -596,6 +836,7 @@ export class SQLiteStore implements ControlPlaneStore {
       .values({
         id: parsed.id,
         codebaseId: parsed.codebaseId,
+        roomId: parsed.roomId,
         workItemId: parsed.workItemId,
         agentId: parsed.agentId,
         runtimeId: parsed.runtimeId,
@@ -613,6 +854,7 @@ export class SQLiteStore implements ControlPlaneStore {
         target: schema.sessions.id,
         set: {
           codebaseId: parsed.codebaseId,
+          roomId: parsed.roomId,
           workItemId: parsed.workItemId,
           agentId: parsed.agentId,
           runtimeId: parsed.runtimeId,
@@ -1171,6 +1413,52 @@ export class SQLiteStore implements ControlPlaneStore {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS rooms (
+        id TEXT PRIMARY KEY,
+        codebase_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS room_agents (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS room_agents_room_idx ON room_agents (room_id, created_at, id);
+
+      CREATE TABLE IF NOT EXISTS room_messages (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        author_json TEXT NOT NULL,
+        body TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS room_messages_room_idx ON room_messages (room_id, created_at, id);
+
+      CREATE TABLE IF NOT EXISTS room_tasks (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL,
+        assigned_agent_id TEXT,
+        work_item_id TEXT,
+        metadata_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS room_tasks_room_idx ON room_tasks (room_id, created_at, id);
+
       CREATE TABLE IF NOT EXISTS work_items (
         id TEXT PRIMARY KEY,
         codebase_id TEXT NOT NULL,
@@ -1203,6 +1491,7 @@ export class SQLiteStore implements ControlPlaneStore {
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         codebase_id TEXT NOT NULL,
+        room_id TEXT,
         work_item_id TEXT,
         agent_id TEXT,
         runtime_id TEXT,
@@ -1336,6 +1625,7 @@ export class SQLiteStore implements ControlPlaneStore {
         created_at TEXT NOT NULL
       );
     `);
+    addColumnIfMissing(this.sqlite, "sessions", "room_id", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "daemon_id", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "renewed_at", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "completed_at", "TEXT");
@@ -1382,6 +1672,57 @@ function rowToCodebase(row: CodebaseRow): Codebase {
   });
 }
 
+function rowToRoom(row: RoomRow): Room {
+  return RoomSchema.parse({
+    id: row.id,
+    codebaseId: row.codebaseId,
+    name: row.name,
+    description: row.description,
+    status: row.status,
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
+function rowToRoomAgent(row: RoomAgentRow): RoomAgent {
+  return RoomAgentSchema.parse({
+    id: row.id,
+    roomId: row.roomId,
+    agentId: row.agentId,
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
+function rowToRoomMessage(row: RoomMessageRow): RoomMessage {
+  return RoomMessageSchema.parse({
+    id: row.id,
+    roomId: row.roomId,
+    author: parseJson(row.authorJson),
+    body: row.body,
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
+function rowToRoomTask(row: RoomTaskRow): RoomTask {
+  return RoomTaskSchema.parse({
+    id: row.id,
+    roomId: row.roomId,
+    title: row.title,
+    body: row.body,
+    status: row.status,
+    assignedAgentId: row.assignedAgentId ?? undefined,
+    workItemId: row.workItemId ?? undefined,
+    metadata: parseJson(row.metadataJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  });
+}
+
 function rowToWorkItem(row: WorkItemRow): WorkItem {
   return WorkItemSchema.parse({
     id: row.id,
@@ -1419,6 +1760,7 @@ function rowToSession(row: SessionRow): Session {
   return SessionSchema.parse({
     id: row.id,
     codebaseId: row.codebaseId,
+    roomId: row.roomId ?? undefined,
     workItemId: row.workItemId ?? undefined,
     agentId: row.agentId ?? undefined,
     runtimeId: row.runtimeId ?? undefined,
@@ -1592,11 +1934,22 @@ function filterWorkItems(items: WorkItem[], query: WorkItemListQuery) {
   });
 }
 
+function filterRooms(items: Room[], query: RoomListQuery) {
+  const q = query.q?.toLowerCase();
+  return items.filter((room) => {
+    if (query.codebaseId && room.codebaseId !== query.codebaseId) return false;
+    if (query.status && room.status !== query.status) return false;
+    if (q && !`${room.name} ${room.description}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
 function filterSessions(items: Session[], query: SessionListQuery) {
   const participant = query.participant?.toLowerCase();
   return items.filter((session) => {
     if (query.status && session.status !== query.status) return false;
     if (query.codebaseId && session.codebaseId !== query.codebaseId) return false;
+    if (query.roomId && session.roomId !== query.roomId) return false;
     if (query.agentId && session.agentId !== query.agentId) return false;
     if (query.runtimeId && session.runtimeId !== query.runtimeId) return false;
     if (participant && !session.participants.some((item) => `${item.id ?? ""} ${item.name}`.toLowerCase().includes(participant))) {

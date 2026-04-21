@@ -1,4 +1,4 @@
-import { SessionListQuerySchema, WorkItemListQuerySchema } from "@automomo/protocol";
+import { RoomListQuerySchema, SessionListQuerySchema, WorkItemListQuerySchema } from "@automomo/protocol";
 
 const knownWorkItemFilters = new Set([
   "codebaseId",
@@ -17,6 +17,7 @@ const knownWorkItemFilters = new Set([
 const knownSessionFilters = new Set([
   "status",
   "codebaseId",
+  "roomId",
   "agentId",
   "runtimeId",
   "participant",
@@ -28,12 +29,18 @@ const knownSessionFilters = new Set([
   "offset"
 ]);
 
+const knownRoomFilters = new Set(["codebaseId", "status", "q", "limit", "offset"]);
+
 export function parseWorkItemListQuery(url: string) {
   return WorkItemListQuerySchema.parse(searchParamsToObject(url, knownWorkItemFilters));
 }
 
 export function parseSessionListQuery(url: string) {
   return SessionListQuerySchema.parse(searchParamsToObject(url, knownSessionFilters));
+}
+
+export function parseRoomListQuery(url: string) {
+  return RoomListQuerySchema.parse(searchParamsToObject(url, knownRoomFilters));
 }
 
 function searchParamsToObject(url: string, known: Set<string>) {

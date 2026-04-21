@@ -1,3 +1,4 @@
+import React from "react";
 import { ReactNode } from "react";
 
 export function DataRows({ title, count, children }: { title: string; count: number; children: ReactNode }) {

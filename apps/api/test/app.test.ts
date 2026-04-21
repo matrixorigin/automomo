@@ -102,6 +102,114 @@ describe("automomo API", () => {
     expect(outcomePayload.session.outcomeId).toBe("outcome_1");
   });
 
+  it("creates and lists rooms, room agents, room messages, room tasks, and room-linked sessions", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now) });
+
+    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/agents", json({ id: "agent_1", name: "Ralph", instructions: "Work carefully." }));
+    await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Investigate room flow" }));
+
+    const roomRes = await app.request(
+      "/api/rooms",
+      json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" })
+    );
+    expect(roomRes.status).toBe(201);
+
+    const roomAgentRes = await app.request(
+      "/api/rooms/room_1/agents",
+      json({ id: "room_agent_1", agentId: "agent_1" })
+    );
+    expect(roomAgentRes.status).toBe(201);
+
+    const roomMessageRes = await app.request(
+      "/api/rooms/room_1/messages",
+      json({
+        id: "message_1",
+        author: { type: "agent", agentId: "agent_1", name: "Ralph" },
+        body: "I am pairing on this room."
+      })
+    );
+    expect(roomMessageRes.status).toBe(201);
+
+    const roomTaskRes = await app.request(
+      "/api/rooms/room_1/tasks",
+      json({
+        id: "task_1",
+        title: "Draft patch",
+        body: "Break the work into two passes.",
+        assignedAgentId: "agent_1",
+        workItemId: "work_1"
+      })
+    );
+    expect(roomTaskRes.status).toBe(201);
+
+    const sessionRes = await app.request(
+      "/api/sessions",
+      json({ id: "session_1", codebaseId: "codebase_1", roomId: "room_1", agentId: "agent_1", workItemId: "work_1" })
+    );
+    expect(sessionRes.status).toBe(201);
+
+    const roomsRes = await app.request("/api/rooms");
+    const roomsPayload = (await roomsRes.json()) as { rooms: Array<{ id: string; codebaseId: string }> };
+    expect(roomsPayload.rooms).toEqual([expect.objectContaining({ id: "room_1", codebaseId: "codebase_1" })]);
+
+    const agentsRes = await app.request("/api/rooms/room_1/agents");
+    const agentsPayload = (await agentsRes.json()) as { roomAgents: Array<{ id: string; roomId: string; agentId: string }> };
+    expect(agentsPayload.roomAgents).toEqual([expect.objectContaining({ roomId: "room_1", agentId: "agent_1" })]);
+
+    const messagesRes = await app.request("/api/rooms/room_1/messages");
+    const messagesPayload = (await messagesRes.json()) as { roomMessages: Array<{ id: string; body: string }> };
+    expect(messagesPayload.roomMessages).toEqual([expect.objectContaining({ id: "message_1", body: "I am pairing on this room." })]);
+
+    const tasksRes = await app.request("/api/rooms/room_1/tasks");
+    const tasksPayload = (await tasksRes.json()) as { roomTasks: Array<{ id: string; assignedAgentId?: string; workItemId?: string }> };
+    expect(tasksPayload.roomTasks).toEqual([
+      expect.objectContaining({ id: "task_1", assignedAgentId: "agent_1", workItemId: "work_1" })
+    ]);
+
+    const sessionPayload = (await sessionRes.json()) as { session: { roomId?: string } };
+    expect(sessionPayload.session.roomId).toBe("room_1");
+  });
+
+  it("rejects rooms, room tasks, and sessions that mix codebases", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now) });
+
+    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/codebases", json({ id: "codebase_2", name: "sidecar", provider: "git" }));
+    await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Primary work" }));
+    await app.request("/api/work-items", json({ id: "work_2", codebaseId: "codebase_2", title: "Foreign work" }));
+    await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" }));
+
+    const unknownCodebaseRes = await app.request(
+      "/api/rooms",
+      json({ id: "room_2", codebaseId: "missing_codebase", name: "Missing codebase room" })
+    );
+    expect(unknownCodebaseRes.status).toBe(404);
+
+    const mismatchedTaskRes = await app.request(
+      "/api/rooms/room_1/tasks",
+      json({
+        id: "task_1",
+        title: "Cross-codebase task",
+        workItemId: "work_2"
+      })
+    );
+    expect(mismatchedTaskRes.status).toBe(409);
+
+    const mismatchedSessionRes = await app.request(
+      "/api/sessions",
+      json({
+        id: "session_1",
+        codebaseId: "codebase_1",
+        roomId: "room_1",
+        workItemId: "work_2"
+      })
+    );
+    expect(mismatchedSessionRes.status).toBe(409);
+  });
+
   it("rejects daemon event uploads that do not match the active lease", async () => {
     const store = new MemoryStore();
     const app = createApp({ store, now: () => new Date(now) });
@@ -223,6 +331,42 @@ describe("automomo API", () => {
           runtimeId: "runtime_1"
         })
       );
+      await firstApp.request(
+        "/api/rooms",
+        json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" })
+      );
+      await firstApp.request(
+        "/api/rooms/room_1/agents",
+        json({ id: "room_agent_1", agentId: "agent_1" })
+      );
+      await firstApp.request(
+        "/api/rooms/room_1/messages",
+        json({
+          id: "message_1",
+          author: { type: "system", name: "Scheduler" },
+          body: "Room seeded from SQLite."
+        })
+      );
+      await firstApp.request(
+        "/api/rooms/room_1/tasks",
+        json({
+          id: "task_1",
+          title: "Draft patch",
+          assignedAgentId: "agent_1",
+          workItemId: "work_1"
+        })
+      );
+      await firstApp.request(
+        "/api/sessions",
+        json({
+          id: "session_1",
+          codebaseId: "codebase_1",
+          roomId: "room_1",
+          workItemId: "work_1",
+          agentId: "agent_1",
+          runtimeId: "runtime_1"
+        })
+      );
 
       const secondApp = createApp({ store: new SQLiteStore({ path: dbPath }), now: () => new Date(later) });
       const codebasesRes = await secondApp.request("/api/codebases");
@@ -243,6 +387,12 @@ describe("automomo API", () => {
       expect(rulesPayload.orchestrationRules).toEqual([
         expect.objectContaining({ id: "rule_1", agentId: "agent_1", runtimeId: "runtime_1" })
       ]);
+      const roomsRes = await secondApp.request("/api/rooms");
+      const roomsPayload = (await roomsRes.json()) as { rooms: Array<{ id: string; codebaseId: string }> };
+      expect(roomsPayload.rooms).toEqual([expect.objectContaining({ id: "room_1", codebaseId: "codebase_1" })]);
+      const roomMessagesRes = await secondApp.request("/api/rooms/room_1/messages");
+      const roomMessagesPayload = (await roomMessagesRes.json()) as { roomMessages: Array<{ id: string }> };
+      expect(roomMessagesPayload.roomMessages).toEqual([expect.objectContaining({ id: "message_1" })]);
 
       const leaseRes = await secondApp.request("/api/daemon/lease", signedJson("/api/daemon/lease", { runtimeId: "runtime_1" }, daemon, later));
       const leasePayload = (await leaseRes.json()) as {
@@ -311,7 +461,7 @@ describe("automomo API", () => {
       const sessionsRes = await fourthApp.request("/api/sessions");
       const sessionsPayload = (await sessionsRes.json()) as { sessions: Array<{ id: string; status: string; outcomeId?: string }> };
       expect(sessionsPayload.sessions).toEqual([
-        expect.objectContaining({ id: "session_1", status: "completed", outcomeId: "outcome_1" })
+        expect.objectContaining({ id: "session_1", status: "completed", outcomeId: "outcome_1", roomId: "room_1" })
       ]);
       const eventsRes = await fourthApp.request("/api/sessions/session_1/events");
       const eventsPayload = (await eventsRes.json()) as { events: Array<{ id: string; summary: string }> };

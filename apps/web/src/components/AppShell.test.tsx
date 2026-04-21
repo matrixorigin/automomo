@@ -15,6 +15,7 @@ describe("AppShell", () => {
     expect(html).toContain("Work Items");
     expect(html).toContain("Orchestration");
     expect(html).toContain("Runtimes");
+    expect(html).toContain("Rooms");
     expect(html).not.toContain("Auto-Mobile");
     expect(html).not.toContain("Pull Requests");
   });

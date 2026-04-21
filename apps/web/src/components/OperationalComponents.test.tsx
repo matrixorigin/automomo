@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AgentEditor } from "./AgentEditor";
 import { EmptyState } from "./EmptyState";
 import { buildHandoffPayload, HandoffControls } from "./HandoffControls";
+import { buildRoomPayload, RoomEditor } from "./RoomEditor";
 import { RuntimeEditor } from "./RuntimeEditor";
 import { RuntimeHealthBadge } from "./RuntimeHealthBadge";
 import { buildRulePayload, RuleEditor } from "./RuleEditor";
@@ -69,12 +70,14 @@ describe("operational web components", () => {
           agents={[{ id: "agent_1", name: "Ralph" }]}
           runtimes={[{ id: "runtime_1", name: "Local Pi" }]}
         />
+        <RoomEditor codebases={[{ id: "codebase_1", name: "Automomo" }]} />
         <AgentEditor runtimes={[{ id: "runtime_1", name: "Local Pi" }]} />
         <RuntimeEditor />
         <HandoffControls sessionId="session_1" />
       </>
     );
     expect(html).toContain('data-json-endpoint="/api/orchestration-rules"');
+    expect(html).toContain('data-json-endpoint="/api/rooms"');
     expect(html).toContain('data-json-endpoint="/api/agents"');
     expect(html).toContain('data-json-endpoint="/api/runtimes"');
     expect(html).toContain('data-json-endpoint="/api/sessions/session_1/handoff"');
@@ -126,6 +129,11 @@ describe("operational web components", () => {
       provider: "docker",
       capacity: 3,
       environment: { command: ["pnpm", "test"], secretRefs: ["GITHUB_TOKEN", "OPENAI_API_KEY"] }
+    });
+    expect(buildRoomPayload(formData({ codebaseId: "codebase_1", name: "Shared room", description: "Pairing" }))).toMatchObject({
+      codebaseId: "codebase_1",
+      name: "Shared room",
+      description: "Pairing"
     });
     expect(buildHandoffPayload(formData({ action: "claim", claimedBy: "mo" }))).toMatchObject({ action: "claim", claimedBy: "mo" });
   });

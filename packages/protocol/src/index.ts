@@ -21,6 +21,75 @@ export const CodebaseSchema = z.object({
   updatedAt: ISODateString
 });
 
+export const RoomStatusSchema = z.enum(["active", "archived"]);
+
+export const RoomSchema = z.object({
+  id: IdSchema,
+  codebaseId: IdSchema,
+  name: z.string().trim().min(1),
+  description: z.string().default(""),
+  status: RoomStatusSchema.default("active"),
+  metadata: MetadataSchema,
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
+export const RoomAgentSchema = z.object({
+  id: IdSchema,
+  roomId: IdSchema,
+  agentId: IdSchema,
+  metadata: MetadataSchema,
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
+export const RoomMessageHumanAuthorSchema = z.object({
+  type: z.literal("human"),
+  name: z.string().trim().min(1)
+});
+
+export const RoomMessageAgentAuthorSchema = z.object({
+  type: z.literal("agent"),
+  agentId: IdSchema,
+  name: z.string().trim().min(1)
+});
+
+export const RoomMessageSystemAuthorSchema = z.object({
+  type: z.literal("system"),
+  name: z.string().trim().min(1)
+});
+
+export const RoomMessageAuthorSchema = z.discriminatedUnion("type", [
+  RoomMessageHumanAuthorSchema,
+  RoomMessageAgentAuthorSchema,
+  RoomMessageSystemAuthorSchema
+]);
+
+export const RoomMessageSchema = z.object({
+  id: IdSchema,
+  roomId: IdSchema,
+  author: RoomMessageAuthorSchema,
+  body: z.string().trim().min(1),
+  metadata: MetadataSchema,
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
+export const RoomTaskStatusSchema = z.enum(["open", "running", "blocked", "done", "cancelled"]);
+
+export const RoomTaskSchema = z.object({
+  id: IdSchema,
+  roomId: IdSchema,
+  title: z.string().trim().min(1),
+  body: z.string().default(""),
+  status: RoomTaskStatusSchema.default("open"),
+  assignedAgentId: IdSchema.optional(),
+  workItemId: IdSchema.optional(),
+  metadata: MetadataSchema,
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
 export const WorkItemSourceSchema = z.enum(["manual", "api", "webhook", "schedule", "sync"]);
 export const WorkItemStatusSchema = z.enum([
   "open",
@@ -92,6 +161,7 @@ export const SessionStatusSchema = z.enum([
 export const SessionSchema = z.object({
   id: IdSchema,
   codebaseId: IdSchema,
+  roomId: IdSchema.optional(),
   workItemId: IdSchema.optional(),
   agentId: IdSchema.optional(),
   runtimeId: IdSchema.optional(),
@@ -238,6 +308,7 @@ export const WorkItemListQuerySchema = z.object({
 export const SessionListQuerySchema = z.object({
   status: SessionStatusSchema.optional(),
   codebaseId: IdSchema.optional(),
+  roomId: IdSchema.optional(),
   agentId: IdSchema.optional(),
   runtimeId: IdSchema.optional(),
   participant: z.string().trim().min(1).optional(),
@@ -257,6 +328,50 @@ export const WorkItemListResponseSchema = z.object({
 export const SessionListResponseSchema = z.object({
   items: z.array(SessionSchema),
   page: PaginationSchema
+});
+
+export const RoomListQuerySchema = z.object({
+  codebaseId: IdSchema.optional(),
+  status: RoomStatusSchema.optional(),
+  q: z.string().trim().min(1).optional(),
+  limit: QueryLimitSchema,
+  offset: QueryOffsetSchema
+});
+
+export const RoomListResponseSchema = z.object({
+  items: z.array(RoomSchema),
+  page: PaginationSchema
+});
+
+export const RoomAgentListResponseSchema = z.object({
+  items: z.array(RoomAgentSchema),
+  page: PaginationSchema
+});
+
+export const RoomMessageListResponseSchema = z.object({
+  items: z.array(RoomMessageSchema),
+  page: PaginationSchema
+});
+
+export const RoomTaskListResponseSchema = z.object({
+  items: z.array(RoomTaskSchema),
+  page: PaginationSchema
+});
+
+export const RoomCreateResponseSchema = z.object({
+  room: RoomSchema
+});
+
+export const RoomAgentCreateResponseSchema = z.object({
+  roomAgent: RoomAgentSchema
+});
+
+export const RoomMessageCreateResponseSchema = z.object({
+  roomMessage: RoomMessageSchema
+});
+
+export const RoomTaskCreateResponseSchema = z.object({
+  roomTask: RoomTaskSchema
 });
 
 export const OverviewSchema = z.object({
@@ -299,6 +414,7 @@ export const RuleEvaluationResultSchema = z.discriminatedUnion("matched", [
 
 export const SessionStartRequestSchema = z.object({
   workItemId: IdSchema,
+  roomId: IdSchema.optional(),
   trigger: OrchestrationTriggerSchema.default("manual")
 });
 
@@ -315,7 +431,8 @@ export const SessionDetailResponseSchema = z.object({
   outcome: OutcomeSchema.optional(),
   workItem: WorkItemSchema.optional(),
   agent: AgentSchema.optional(),
-  runtime: RuntimeSchema.optional()
+  runtime: RuntimeSchema.optional(),
+  room: RoomSchema.optional()
 });
 
 export const DaemonStatusSchema = z.enum(["online", "offline", "unhealthy"]);
@@ -492,6 +609,16 @@ export const SessionEventEnvelopeSchema = z.object({
 });
 
 export type Codebase = z.infer<typeof CodebaseSchema>;
+export type RoomStatus = z.infer<typeof RoomStatusSchema>;
+export type Room = z.infer<typeof RoomSchema>;
+export type RoomAgent = z.infer<typeof RoomAgentSchema>;
+export type RoomMessageHumanAuthor = z.infer<typeof RoomMessageHumanAuthorSchema>;
+export type RoomMessageAgentAuthor = z.infer<typeof RoomMessageAgentAuthorSchema>;
+export type RoomMessageSystemAuthor = z.infer<typeof RoomMessageSystemAuthorSchema>;
+export type RoomMessageAuthor = z.infer<typeof RoomMessageAuthorSchema>;
+export type RoomMessage = z.infer<typeof RoomMessageSchema>;
+export type RoomTaskStatus = z.infer<typeof RoomTaskStatusSchema>;
+export type RoomTask = z.infer<typeof RoomTaskSchema>;
 export type WorkItem = z.infer<typeof WorkItemSchema>;
 export type OrchestrationRule = z.infer<typeof OrchestrationRuleSchema>;
 export type OrchestrationTrigger = z.infer<typeof OrchestrationTriggerSchema>;
@@ -504,8 +631,17 @@ export type HumanHandoff = z.infer<typeof HumanHandoffSchema>;
 export type HandoffAction = z.infer<typeof HandoffActionSchema>;
 export type WorkItemListQuery = z.infer<typeof WorkItemListQuerySchema>;
 export type SessionListQuery = z.infer<typeof SessionListQuerySchema>;
+export type RoomListQuery = z.infer<typeof RoomListQuerySchema>;
 export type WorkItemListResponse = z.infer<typeof WorkItemListResponseSchema>;
 export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
+export type RoomListResponse = z.infer<typeof RoomListResponseSchema>;
+export type RoomAgentListResponse = z.infer<typeof RoomAgentListResponseSchema>;
+export type RoomMessageListResponse = z.infer<typeof RoomMessageListResponseSchema>;
+export type RoomTaskListResponse = z.infer<typeof RoomTaskListResponseSchema>;
+export type RoomCreateResponse = z.infer<typeof RoomCreateResponseSchema>;
+export type RoomAgentCreateResponse = z.infer<typeof RoomAgentCreateResponseSchema>;
+export type RoomMessageCreateResponse = z.infer<typeof RoomMessageCreateResponseSchema>;
+export type RoomTaskCreateResponse = z.infer<typeof RoomTaskCreateResponseSchema>;
 export type Overview = z.infer<typeof OverviewSchema>;
 export type RuleEvaluationResult = z.infer<typeof RuleEvaluationResultSchema>;
 export type SessionStartRequest = z.infer<typeof SessionStartRequestSchema>;

@@ -14,6 +14,10 @@ import {
   LeaseRequestSchema,
   LeaseRenewRequestSchema,
   OrchestrationRuleSchema,
+  RoomAgentSchema,
+  RoomMessageSchema,
+  RoomSchema,
+  RoomTaskSchema,
   RuntimeExecutionRequestSchema,
   RuntimeHeartbeatSchema,
   RuntimeSchema,
@@ -25,7 +29,7 @@ import {
 import { apiKeyCan, tokenFromAuthorization } from "./auth/api-keys";
 import { GitHubClient, normalizeGitHubWorkItem } from "./connectors/github/client";
 import { verifyDaemonRequest } from "./daemon/auth";
-import { parseSessionListQuery, parseWorkItemListQuery } from "./filters";
+import { parseRoomListQuery, parseSessionListQuery, parseWorkItemListQuery } from "./filters";
 import { buildOverview } from "./overview";
 import { redactSecrets } from "./security/redact";
 import { InMemoryRateLimiter, RateLimitOptions } from "./security/rate-limit";
@@ -73,8 +77,43 @@ const createRuleBody = OrchestrationRuleSchema.partial({
   createdAt: true,
   updatedAt: true
 });
+const createRoomBody = RoomSchema.partial({
+  id: true,
+  description: true,
+  status: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true
+});
+const createRoomAgentBody = RoomAgentSchema.partial({
+  id: true,
+  roomId: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true
+});
+const createRoomMessageBody = RoomMessageSchema.partial({
+  id: true,
+  roomId: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true
+});
+const createRoomTaskBody = RoomTaskSchema.partial({
+  id: true,
+  roomId: true,
+  body: true,
+  status: true,
+  assignedAgentId: true,
+  workItemId: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true
+});
 const createSessionBody = SessionSchema.partial({
   id: true,
+  codebaseId: true,
+  roomId: true,
   status: true,
   participants: true,
   metadata: true,
@@ -205,6 +244,193 @@ export function createApp(env: AppEnv = {}) {
     return c.json(result);
   });
 
+  app.get("/api/rooms", (c) => {
+    const query = parseRoomListQuery(c.req.url);
+    const response = store.listRooms(query);
+    return c.json({ ...response, rooms: response.items });
+  });
+  app.post("/api/rooms", async (c) => {
+    const body = await parseJson(c.req, createRoomBody);
+    if (!store.listCodebases().some((codebase) => codebase.id === body.codebaseId)) {
+      return c.json({ error: "codebase not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "rooms:write", body.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const timestamp = now();
+    const room = store.saveRoom({
+      id: body.id ?? randomId("room"),
+      codebaseId: body.codebaseId,
+      name: body.name,
+      description: body.description ?? "",
+      status: body.status ?? "active",
+      metadata: body.metadata ?? {},
+      createdAt: body.createdAt ?? timestamp,
+      updatedAt: body.updatedAt ?? timestamp
+    });
+    audit(store, {
+      actorType: auth.apiKey ? "api_key" : "system",
+      actorId: auth.apiKey?.id,
+      action: "room.create",
+      targetType: "room",
+      targetId: room.id,
+      metadata: { codebaseId: room.codebaseId },
+      createdAt: timestamp
+    });
+    return c.json({ room }, 201);
+  });
+  app.get("/api/rooms/:id/agents", (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const roomAgents = store.listRoomAgents(room.id);
+    return c.json({
+      roomAgents,
+      items: roomAgents,
+      page: { limit: roomAgents.length, offset: 0, total: roomAgents.length }
+    });
+  });
+  app.post("/api/rooms/:id/agents", async (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "rooms:write", room.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const body = await parseJson(c.req, createRoomAgentBody);
+    const agent = store.getAgent(body.agentId);
+    if (!agent) {
+      return c.json({ error: "agent not found" }, 404);
+    }
+    const timestamp = now();
+    const roomAgent = store.saveRoomAgent({
+      id: body.id ?? randomId("room_agent"),
+      roomId: room.id,
+      agentId: body.agentId,
+      metadata: body.metadata ?? {},
+      createdAt: body.createdAt ?? timestamp,
+      updatedAt: body.updatedAt ?? timestamp
+    });
+    audit(store, {
+      actorType: auth.apiKey ? "api_key" : "system",
+      actorId: auth.apiKey?.id,
+      action: "room.agent.create",
+      targetType: "room_agent",
+      targetId: roomAgent.id,
+      metadata: { roomId: room.id, agentId: roomAgent.agentId },
+      createdAt: timestamp
+    });
+    return c.json({ roomAgent }, 201);
+  });
+  app.get("/api/rooms/:id/messages", (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const roomMessages = store.listRoomMessages(room.id);
+    return c.json({
+      roomMessages,
+      items: roomMessages,
+      page: { limit: roomMessages.length, offset: 0, total: roomMessages.length }
+    });
+  });
+  app.post("/api/rooms/:id/messages", async (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "rooms:write", room.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const body = await parseJson(c.req, createRoomMessageBody);
+    if (body.author.type === "agent" && !store.getAgent(body.author.agentId)) {
+      return c.json({ error: "agent not found" }, 404);
+    }
+    const timestamp = now();
+    const roomMessage = store.saveRoomMessage({
+      id: body.id ?? randomId("room_message"),
+      roomId: room.id,
+      author: body.author,
+      body: body.body,
+      metadata: body.metadata ?? {},
+      createdAt: body.createdAt ?? timestamp,
+      updatedAt: body.updatedAt ?? timestamp
+    });
+    audit(store, {
+      actorType: body.author.type === "system" ? "system" : body.author.type === "human" ? "human" : "system",
+      actorId: body.author.type === "agent" ? body.author.agentId : undefined,
+      action: "room.message.create",
+      targetType: "room_message",
+      targetId: roomMessage.id,
+      metadata: { roomId: room.id },
+      createdAt: timestamp
+    });
+    return c.json({ roomMessage }, 201);
+  });
+  app.get("/api/rooms/:id/tasks", (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const roomTasks = store.listRoomTasks(room.id);
+    return c.json({
+      roomTasks,
+      items: roomTasks,
+      page: { limit: roomTasks.length, offset: 0, total: roomTasks.length }
+    });
+  });
+  app.post("/api/rooms/:id/tasks", async (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "rooms:write", room.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const body = await parseJson(c.req, createRoomTaskBody);
+    if (body.assignedAgentId && !store.getAgent(body.assignedAgentId)) {
+      return c.json({ error: "agent not found" }, 404);
+    }
+    if (body.workItemId) {
+      const workItem = store.getWorkItem(body.workItemId);
+      if (!workItem) {
+        return c.json({ error: "work item not found" }, 404);
+      }
+      if (workItem.codebaseId !== room.codebaseId) {
+        return c.json({ error: "work item does not belong to room codebase" }, 409);
+      }
+    }
+    const timestamp = now();
+    const roomTask = store.saveRoomTask({
+      id: body.id ?? randomId("room_task"),
+      roomId: room.id,
+      title: body.title,
+      body: body.body ?? "",
+      status: body.status ?? "open",
+      assignedAgentId: body.assignedAgentId,
+      workItemId: body.workItemId,
+      metadata: body.metadata ?? {},
+      createdAt: body.createdAt ?? timestamp,
+      updatedAt: body.updatedAt ?? timestamp
+    });
+    audit(store, {
+      actorType: auth.apiKey ? "api_key" : "system",
+      actorId: auth.apiKey?.id,
+      action: "room.task.create",
+      targetType: "room_task",
+      targetId: roomTask.id,
+      metadata: { roomId: room.id, workItemId: roomTask.workItemId, assignedAgentId: roomTask.assignedAgentId },
+      createdAt: timestamp
+    });
+    return c.json({ roomTask }, 201);
+  });
+
   app.get("/api/orchestration-rules", (c) => c.json({ orchestrationRules: store.listOrchestrationRules() }));
   app.post("/api/orchestration-rules", async (c) => {
     const body = await parseJson(c.req, createRuleBody);
@@ -236,17 +462,38 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/sessions", async (c) => {
     const body = await parseJson(c.req, createSessionBody);
+    const room = body.roomId ? store.getRoom(body.roomId) : undefined;
+    if (body.roomId && !room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const codebaseId = body.codebaseId ?? room?.codebaseId;
+    if (!codebaseId) {
+      return c.json({ error: "codebaseId or roomId required" }, 400);
+    }
+    if (room && room.codebaseId !== codebaseId) {
+      return c.json({ error: "room does not belong to codebase" }, 409);
+    }
+    if (body.workItemId) {
+      const workItem = store.getWorkItem(body.workItemId);
+      if (!workItem) {
+        return c.json({ error: "work item not found" }, 404);
+      }
+      if (workItem.codebaseId !== codebaseId) {
+        return c.json({ error: "work item does not belong to session codebase" }, 409);
+      }
+    }
     const requestedRuntime = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
     const sessionRequiresAuth =
       requireApiKey || (allowLocalExecution && !trustLocalExecutionWithoutAuth && requestedRuntime?.mode === "local");
-    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", body.codebaseId, sessionRequiresAuth, store, bootstrapToken);
+    const auth = await requireWriteAccess(c.req.raw.headers, "sessions:write", codebaseId, sessionRequiresAuth, store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
     }
     const timestamp = now();
     const session = store.saveSession({
       id: body.id ?? randomId("session"),
-      codebaseId: body.codebaseId,
+      codebaseId,
+      roomId: body.roomId ?? room?.id,
       workItemId: body.workItemId,
       agentId: body.agentId,
       runtimeId: body.runtimeId,
@@ -276,7 +523,8 @@ export function createApp(env: AppEnv = {}) {
       outcome: session.outcomeId ? store.getOutcome(session.outcomeId) : store.getOutcomeForSession(sessionId),
       workItem: session.workItemId ? store.getWorkItem(session.workItemId) : undefined,
       agent: session.agentId ? store.getAgent(session.agentId) : undefined,
-      runtime: session.runtimeId ? store.getRuntime(session.runtimeId) : undefined
+      runtime: session.runtimeId ? store.getRuntime(session.runtimeId) : undefined,
+      room: session.roomId ? store.getRoom(session.roomId) : undefined
     });
   });
   app.get("/api/sessions/:id/events", (c) => c.json({ events: store.listSessionEvents(c.req.param("id")) }));

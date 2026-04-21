@@ -2,6 +2,16 @@ import {
   AgentSchema,
   CodebaseSchema,
   OrchestrationRuleSchema,
+  RoomAgentCreateResponseSchema,
+  RoomAgentSchema,
+  RoomCreateResponseSchema,
+  RoomListQuery,
+  RoomListResponseSchema,
+  RoomMessageCreateResponseSchema,
+  RoomMessageSchema,
+  RoomSchema,
+  RoomTaskCreateResponseSchema,
+  RoomTaskSchema,
   OverviewSchema,
   RuntimeSchema,
   SessionDetailResponseSchema,
@@ -55,6 +65,24 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
       const payload = (await get("/api/orchestration-rules")) as { orchestrationRules: unknown[] };
       return payload.orchestrationRules.map((item) => OrchestrationRuleSchema.parse(item));
     },
+    async listRooms(query: Partial<RoomListQuery> = {}) {
+      return RoomListResponseSchema.parse(await get(`/api/rooms${serializeQuery(query)}`));
+    },
+    async listRoomAgents(roomId: string) {
+      const payload = (await get(`/api/rooms/${roomId}/agents`)) as { roomAgents?: unknown[]; items?: unknown[] };
+      const items = payload.roomAgents ?? payload.items ?? [];
+      return items.map((item) => RoomAgentSchema.parse(item));
+    },
+    async listRoomMessages(roomId: string) {
+      const payload = (await get(`/api/rooms/${roomId}/messages`)) as { roomMessages?: unknown[]; items?: unknown[] };
+      const items = payload.roomMessages ?? payload.items ?? [];
+      return items.map((item) => RoomMessageSchema.parse(item));
+    },
+    async listRoomTasks(roomId: string) {
+      const payload = (await get(`/api/rooms/${roomId}/tasks`)) as { roomTasks?: unknown[]; items?: unknown[] };
+      const items = payload.roomTasks ?? payload.items ?? [];
+      return items.map((item) => RoomTaskSchema.parse(item));
+    },
     async listSessions(query: Partial<SessionListQuery> = {}) {
       return SessionListResponseSchema.parse(await get(`/api/sessions${serializeQuery(query)}`));
     },
@@ -80,6 +108,22 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     async createOrchestrationRule(body: Record<string, unknown>) {
       const payload = (await post("/api/orchestration-rules", body)) as { orchestrationRule: unknown };
       return OrchestrationRuleSchema.parse(payload.orchestrationRule);
+    },
+    async createRoom(body: Record<string, unknown>) {
+      const payload = (await post("/api/rooms", body)) as { room: unknown };
+      return RoomCreateResponseSchema.parse(payload).room;
+    },
+    async createRoomAgent(roomId: string, body: Record<string, unknown>) {
+      const payload = (await post(`/api/rooms/${roomId}/agents`, body)) as { roomAgent: unknown };
+      return RoomAgentCreateResponseSchema.parse(payload).roomAgent;
+    },
+    async createRoomMessage(roomId: string, body: Record<string, unknown>) {
+      const payload = (await post(`/api/rooms/${roomId}/messages`, body)) as { roomMessage: unknown };
+      return RoomMessageCreateResponseSchema.parse(payload).roomMessage;
+    },
+    async createRoomTask(roomId: string, body: Record<string, unknown>) {
+      const payload = (await post(`/api/rooms/${roomId}/tasks`, body)) as { roomTask: unknown };
+      return RoomTaskCreateResponseSchema.parse(payload).roomTask;
     }
   };
 }
@@ -92,19 +136,20 @@ function serializeQuery(query: Record<string, unknown>) {
   const params = new URLSearchParams();
   const preferredOrder = [
     "codebaseId",
+    "roomId",
     "source",
     "status",
     "assignee",
     "q",
+    "limit",
+    "offset",
     "agentId",
     "runtimeId",
     "participant",
     "createdAfter",
     "createdBefore",
     "updatedAfter",
-    "updatedBefore",
-    "limit",
-    "offset"
+    "updatedBefore"
   ];
   const keys = [...new Set([...preferredOrder, ...Object.keys(query)])];
   for (const key of keys) {

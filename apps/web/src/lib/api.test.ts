@@ -51,6 +51,18 @@ describe("automomo web API client", () => {
         if (url.endsWith("/api/orchestration-rules")) {
           return Response.json({ orchestrationRules: [] });
         }
+        if (url.endsWith("/api/rooms")) {
+          return Response.json({ rooms: [], items: [], page: { limit: 50, offset: 0, total: 0 } });
+        }
+        if (url.endsWith("/api/rooms/room_1/agents")) {
+          return Response.json({ roomAgents: [] });
+        }
+        if (url.endsWith("/api/rooms/room_1/messages")) {
+          return Response.json({ roomMessages: [] });
+        }
+        if (url.endsWith("/api/rooms/room_1/tasks")) {
+          return Response.json({ roomTasks: [] });
+        }
         if (url.endsWith("/api/agents")) {
           return Response.json({ agents: [] });
         }
@@ -63,6 +75,10 @@ describe("automomo web API client", () => {
 
     await expect(client.listCodebases()).resolves.toHaveLength(1);
     await expect(client.listOrchestrationRules()).resolves.toEqual([]);
+    await expect(client.listRooms()).resolves.toMatchObject({ items: [], page: { total: 0 } });
+    await expect(client.listRoomAgents("room_1")).resolves.toEqual([]);
+    await expect(client.listRoomMessages("room_1")).resolves.toEqual([]);
+    await expect(client.listRoomTasks("room_1")).resolves.toEqual([]);
     await expect(client.listAgents()).resolves.toEqual([]);
     await expect(client.listRuntimes()).resolves.toEqual([]);
     await expect(client.listSessions({ status: "queued" })).resolves.toMatchObject({ page: { total: 0 } });
@@ -89,11 +105,25 @@ describe("automomo web API client", () => {
             }
           });
         }
+        if (String(input).endsWith("/api/rooms")) {
+          return Response.json({
+            room: {
+              id: "room_1",
+              codebaseId: "codebase_1",
+              name: "Shared room",
+              status: "active",
+              metadata: {},
+              createdAt: now,
+              updatedAt: now
+            }
+          });
+        }
         return Response.json({});
       }
     });
 
     await client.createAgent({ name: "Ralph" });
+    await client.createRoom({ codebaseId: "codebase_1", name: "Shared room" });
 
     expect(requests).toEqual([
       {
@@ -102,6 +132,14 @@ describe("automomo web API client", () => {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ name: "Ralph" })
+        })
+      },
+      {
+        url: "http://automomo.test/api/rooms",
+        init: expect.objectContaining({
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ codebaseId: "codebase_1", name: "Shared room" })
         })
       }
     ]);

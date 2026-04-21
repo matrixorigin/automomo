@@ -13,6 +13,49 @@ export const codebases = sqliteTable("codebases", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const rooms = sqliteTable("rooms", {
+  id: text("id").primaryKey(),
+  codebaseId: text("codebase_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const roomAgents = sqliteTable("room_agents", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  agentId: text("agent_id").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const roomMessages = sqliteTable("room_messages", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  authorJson: text("author_json").notNull(),
+  body: text("body").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const roomTasks = sqliteTable("room_tasks", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull(),
+  assignedAgentId: text("assigned_agent_id"),
+  workItemId: text("work_item_id"),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
 export const workItems = sqliteTable("work_items", {
   id: text("id").primaryKey(),
   codebaseId: text("codebase_id").notNull(),
@@ -45,6 +88,7 @@ export const orchestrationRules = sqliteTable("orchestration_rules", {
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   codebaseId: text("codebase_id").notNull(),
+  roomId: text("room_id"),
   workItemId: text("work_item_id"),
   agentId: text("agent_id"),
   runtimeId: text("runtime_id"),
