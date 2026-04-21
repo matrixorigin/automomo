@@ -7,12 +7,14 @@ type RoomWorkspacePanelMap = Record<RoomWorkspaceTabId, ReactNode>;
 
 export function RoomWorkspace({
   header,
+  contextContent,
   chatContent,
   boardContent,
   sessionsContent,
   outcomesContent
 }: {
   header: ReactNode;
+  contextContent?: ReactNode;
   chatContent: ReactNode;
   boardContent: ReactNode;
   sessionsContent: ReactNode;
@@ -32,6 +34,7 @@ export function RoomWorkspace({
       <div className="room-workspace-tabs">
         <RoomWorkspaceTabs activeTabId={activeTabId} onTabChange={setActiveTabId} />
       </div>
+      {contextContent ? <section className="room-workspace-context">{contextContent}</section> : null}
       {roomWorkspaceTabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         return (

@@ -707,10 +707,78 @@ a {
   gap: 6px;
 }
 
+.room-header-runtime {
+  min-width: 0;
+}
+
 .room-runtime-presence {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.room-runtime-presence .status-pill {
+  min-width: 72px;
+  min-height: 24px;
+  font-size: 11px;
+}
+
+.room-workspace-context {
+  padding: 12px 30px;
+  border-bottom: 1px solid var(--line);
+}
+
+.room-runtime-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.room-runtime-cards {
+  display: grid;
+  gap: 10px;
+}
+
+.room-runtime-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.room-runtime-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.room-runtime-card header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.room-runtime-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-runtime-workspace-root {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .room-workspace-tabs {

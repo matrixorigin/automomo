@@ -23,7 +23,7 @@ export function RoomHeader({
       </div>
       <div className="room-header-meta">
         <Badge tone="blue">{joinedAgentCount} agents joined</Badge>
-        {runtimePresence}
+        <div className="room-header-runtime">{runtimePresence}</div>
       </div>
     </header>
   );

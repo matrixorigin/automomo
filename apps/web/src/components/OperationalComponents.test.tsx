@@ -7,6 +7,7 @@ import { buildHandoffPayload, HandoffControls } from "./HandoffControls";
 import { buildRoomPayload, RoomEditor } from "./RoomEditor";
 import { RuntimeEditor } from "./RuntimeEditor";
 import { RuntimeHealthBadge } from "./RuntimeHealthBadge";
+import { RuntimePresenceBadge } from "./RuntimePresenceBadge";
 import { buildRulePayload, RuleEditor } from "./RuleEditor";
 import { SessionDetailPanel } from "./SessionDetailPanel";
 import { StatusStrip } from "./StatusStrip";
@@ -52,16 +53,39 @@ describe("operational web components", () => {
         />
         <AgentEditor runtimes={[{ id: "runtime_1", name: "Local Pi" }]} />
         <RuntimeEditor />
+        <RuntimeHealthBadge status="idle" />
         <RuntimeHealthBadge status="online" />
+        <RuntimeHealthBadge status="offline" />
+        <RuntimeHealthBadge status="busy" />
         <RuntimeHealthBadge status="unhealthy" />
+        <RuntimePresenceBadge
+          runtime={{
+            id: "runtime_1",
+            name: "Local Pi",
+            mode: "local",
+            provider: "pi",
+            environment: { networkPolicy: "restricted", env: {}, secretRefs: [] },
+            status: "online",
+            capacity: 1,
+            activeSessions: 2,
+            metadata: {},
+            createdAt: now,
+            updatedAt: now
+          }}
+        />
       </>
     );
 
     expect(html).toContain("Rule name");
     expect(html).toContain("Agent name");
     expect(html).toContain("Runtime name");
+    expect(html).toContain("idle");
     expect(html).toContain("online");
+    expect(html).toContain("offline");
+    expect(html).toContain("busy");
     expect(html).toContain("unhealthy");
+    expect(html).toContain("Local");
+    expect(html).toContain("2 sessions");
   });
 
   it("renders JSON-backed mutation forms and builds API payloads from form data", () => {

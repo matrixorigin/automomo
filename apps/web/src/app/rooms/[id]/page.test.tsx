@@ -144,7 +144,8 @@ describe("Room detail page", () => {
 
     expect(html).toContain("Shared room");
     expect(html).toContain("2 agents joined");
-    expect(html).toContain("Runtime presence");
+    expect(html).toContain("Local");
+    expect(html).toContain("Runtime context");
     expect(html).toContain("Chat");
     expect(html).toContain("Board");
     expect(html).toContain("Sessions");

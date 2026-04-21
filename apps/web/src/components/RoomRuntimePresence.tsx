@@ -1,24 +1,26 @@
 import React from "react";
-import type { Runtime, Session } from "@automomo/protocol";
+import type { Agent, Runtime, Session } from "@automomo/protocol";
+import { getRoomRuntimeCandidates } from "./RoomRuntimePanel";
+import { RuntimePresenceBadge } from "./RuntimePresenceBadge";
 
 export function RoomRuntimePresence({
   runtimes,
-  sessions
+  sessions,
+  joinedAgents,
+  codebaseWorkspaceRoot
 }: {
   runtimes: Runtime[];
   sessions: Session[];
+  joinedAgents: Agent[];
+  codebaseWorkspaceRoot?: string;
 }) {
-  const onlineCount = runtimes.filter((runtime) => runtime.status === "online" || runtime.status === "busy").length;
-  const busyCount = runtimes.filter((runtime) => runtime.status === "busy").length;
-  const activeSessionCount = sessions.filter((session) => isActiveSession(session.status)).length;
+  const candidates = getRoomRuntimeCandidates({
+    runtimes,
+    sessions,
+    joinedAgents,
+    codebaseWorkspaceRoot
+  });
+  const primaryRuntime = candidates[0]?.runtime;
 
-  return (
-    <p className="room-runtime-presence">
-      Runtime presence: {onlineCount} online, {busyCount} busy, {activeSessionCount} active sessions
-    </p>
-  );
-}
-
-function isActiveSession(status: Session["status"]) {
-  return status === "queued" || status === "leased" || status === "running" || status === "needs_human" || status === "claimed_by_human" || status === "resumed_by_agent";
+  return <RuntimePresenceBadge runtime={primaryRuntime} />;
 }

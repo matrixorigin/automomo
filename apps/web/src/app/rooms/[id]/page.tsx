@@ -7,6 +7,7 @@ import { EmptyState } from "../../../components/EmptyState";
 import { RoomAgentJoinForm } from "../../../components/RoomAgentJoinForm";
 import { RoomChatComposer } from "../../../components/RoomChatComposer";
 import { RoomHeader } from "../../../components/RoomHeader";
+import { RoomRuntimePanel } from "../../../components/RoomRuntimePanel";
 import { RoomRuntimePresence } from "../../../components/RoomRuntimePresence";
 import { RoomSessionsPanel } from "../../../components/RoomSessionsPanel";
 import { RoomOutcomesPanel } from "../../../components/RoomOutcomesPanel";
@@ -62,7 +63,22 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
             roomName={room.name}
             roomDescription={room.description || codebase?.name || "Shared room context"}
             joinedAgentCount={joinedAgents.length}
-            runtimePresence={<RoomRuntimePresence runtimes={runtimes} sessions={sessions} />}
+            runtimePresence={
+              <RoomRuntimePresence
+                runtimes={runtimes}
+                sessions={sessions}
+                joinedAgents={joinedAgents}
+                codebaseWorkspaceRoot={codebase?.workspaceRoot}
+              />
+            }
+          />
+        }
+        contextContent={
+          <RoomRuntimePanel
+            runtimes={runtimes}
+            sessions={sessions}
+            joinedAgents={joinedAgents}
+            codebaseWorkspaceRoot={codebase?.workspaceRoot}
           />
         }
         chatContent={
