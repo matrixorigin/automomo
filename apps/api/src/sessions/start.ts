@@ -36,6 +36,7 @@ export function startSessionFromWorkItem(input: {
   const session = input.store.saveSession({
     id,
     codebaseId: workItem.codebaseId,
+    roomId: workItem.roomId,
     workItemId: workItem.id,
     agentId: evaluation.agentId,
     runtimeId,

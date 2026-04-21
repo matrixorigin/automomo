@@ -190,6 +190,13 @@ export function createApp(env: AppEnv = {}) {
   });
   app.post("/api/work-items", async (c) => {
     const body = await parseJson(c.req, createWorkItemBody);
+    const room = body.roomId ? store.getRoom(body.roomId) : undefined;
+    if (body.roomId && !room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    if (room && room.codebaseId !== body.codebaseId) {
+      return c.json({ error: "room does not belong to work item codebase" }, 409);
+    }
     const auth = await requireWriteAccess(c.req.raw.headers, "work_items:write", body.codebaseId, requireApiKey, store, bootstrapToken);
     if (!auth.ok) {
       return c.json({ error: auth.error }, auth.status);
@@ -198,6 +205,7 @@ export function createApp(env: AppEnv = {}) {
     let item = store.saveWorkItem({
       id: body.id ?? randomId("work"),
       codebaseId: body.codebaseId,
+      roomId: body.roomId,
       title: body.title,
       body: body.body ?? "",
       source: body.source ?? "manual",
@@ -405,6 +413,9 @@ export function createApp(env: AppEnv = {}) {
       if (workItem.codebaseId !== room.codebaseId) {
         return c.json({ error: "work item does not belong to room codebase" }, 409);
       }
+      if (workItem.roomId !== room.id) {
+        return c.json({ error: "work item does not belong to room" }, 409);
+      }
     }
     const timestamp = now();
     const roomTask = store.saveRoomTask({
@@ -429,6 +440,59 @@ export function createApp(env: AppEnv = {}) {
       createdAt: timestamp
     });
     return c.json({ roomTask }, 201);
+  });
+  app.get("/api/rooms/:id/work-items", (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const response = store.listWorkItems({
+      codebaseId: room.codebaseId,
+      roomId: room.id,
+      limit: 50,
+      offset: 0
+    });
+    return c.json({ ...response, workItems: response.items });
+  });
+  app.post("/api/rooms/:id/work-items", async (c) => {
+    const room = store.getRoom(c.req.param("id"));
+    if (!room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    const auth = await requireWriteAccess(c.req.raw.headers, "work_items:write", room.codebaseId, requireApiKey, store, bootstrapToken);
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const body = await parseJson(c.req, createWorkItemBody.partial({ codebaseId: true, roomId: true }));
+    if (body.codebaseId && body.codebaseId !== room.codebaseId) {
+      return c.json({ error: "work item codebase does not match room codebase" }, 409);
+    }
+    const timestamp = now();
+    const item = store.saveWorkItem({
+      id: body.id ?? randomId("work"),
+      codebaseId: room.codebaseId,
+      roomId: room.id,
+      title: body.title,
+      body: body.body ?? "",
+      source: body.source ?? "manual",
+      status: body.status ?? "open",
+      priority: body.priority ?? "medium",
+      labels: body.labels ?? [],
+      connector: body.connector,
+      metadata: body.metadata ?? {},
+      createdAt: body.createdAt ?? timestamp,
+      updatedAt: body.updatedAt ?? timestamp
+    });
+    audit(store, {
+      actorType: auth.apiKey ? "api_key" : "system",
+      actorId: auth.apiKey?.id,
+      action: "room.work_item.create",
+      targetType: "work_item",
+      targetId: item.id,
+      metadata: { roomId: room.id },
+      createdAt: timestamp
+    });
+    return c.json({ workItem: item }, 201);
   });
 
   app.get("/api/orchestration-rules", (c) => c.json({ orchestrationRules: store.listOrchestrationRules() }));
@@ -473,13 +537,16 @@ export function createApp(env: AppEnv = {}) {
     if (room && room.codebaseId !== codebaseId) {
       return c.json({ error: "room does not belong to codebase" }, 409);
     }
+    const workItem = body.workItemId ? store.getWorkItem(body.workItemId) : undefined;
     if (body.workItemId) {
-      const workItem = store.getWorkItem(body.workItemId);
       if (!workItem) {
         return c.json({ error: "work item not found" }, 404);
       }
       if (workItem.codebaseId !== codebaseId) {
         return c.json({ error: "work item does not belong to session codebase" }, 409);
+      }
+      if (workItem.roomId && body.roomId && workItem.roomId !== body.roomId) {
+        return c.json({ error: "work item room does not match session room" }, 409);
       }
     }
     const requestedRuntime = body.runtimeId ? store.getRuntime(body.runtimeId) : undefined;
@@ -493,7 +560,7 @@ export function createApp(env: AppEnv = {}) {
     const session = store.saveSession({
       id: body.id ?? randomId("session"),
       codebaseId,
-      roomId: body.roomId ?? room?.id,
+      roomId: body.roomId ?? workItem?.roomId ?? room?.id,
       workItemId: body.workItemId,
       agentId: body.agentId,
       runtimeId: body.runtimeId,

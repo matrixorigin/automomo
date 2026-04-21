@@ -172,6 +172,44 @@ describe("automomo protocol schemas", () => {
     expect(rooms.items[0]?.id).toBe("room_1");
   });
 
+  it("models room-scoped work items and room work filters", async () => {
+    const protocol = await import("../src/index");
+
+    const workItem = protocol.WorkItemSchema.parse({
+      id: "work_1",
+      codebaseId: "codebase_1",
+      roomId: "room_1",
+      title: "Build room board",
+      createdAt: now,
+      updatedAt: now
+    });
+    const query = protocol.WorkItemListQuerySchema.parse({
+      codebaseId: "codebase_1",
+      roomId: "room_1",
+      status: "ready"
+    });
+    const upsert = protocol.WorkItemUpsertRequestSchema.parse({
+      codebaseId: "codebase_1",
+      roomId: "room_1",
+      connector: { type: "manual", id: "room-work-1", metadata: {} },
+      title: "Seed room work"
+    });
+
+    expect(workItem.roomId).toBe("room_1");
+    expect(query.roomId).toBe("room_1");
+    expect(upsert.roomId).toBe("room_1");
+    expect(() =>
+      protocol.WorkItemSchema.parse({
+        id: "work_2",
+        codebaseId: "codebase_1",
+        roomId: "",
+        title: "Invalid room",
+        createdAt: now,
+        updatedAt: now
+      })
+    ).toThrow();
+  });
+
   it("defaults list filters and rejects invalid enum values", () => {
     expect(WorkItemListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
     expect(SessionListQuerySchema.parse({ limit: "200", offset: "10" })).toMatchObject({ limit: 200, offset: 10 });

@@ -736,6 +736,7 @@ export class SQLiteStore implements ControlPlaneStore {
       .values({
         id: parsed.id,
         codebaseId: parsed.codebaseId,
+        roomId: parsed.roomId,
         title: parsed.title,
         body: parsed.body,
         source: parsed.source,
@@ -751,6 +752,7 @@ export class SQLiteStore implements ControlPlaneStore {
         target: schema.workItems.id,
         set: {
           codebaseId: parsed.codebaseId,
+          roomId: parsed.roomId,
           title: parsed.title,
           body: parsed.body,
           source: parsed.source,
@@ -1462,6 +1464,7 @@ export class SQLiteStore implements ControlPlaneStore {
       CREATE TABLE IF NOT EXISTS work_items (
         id TEXT PRIMARY KEY,
         codebase_id TEXT NOT NULL,
+        room_id TEXT,
         title TEXT NOT NULL,
         body TEXT NOT NULL,
         source TEXT NOT NULL,
@@ -1626,6 +1629,7 @@ export class SQLiteStore implements ControlPlaneStore {
       );
     `);
     addColumnIfMissing(this.sqlite, "sessions", "room_id", "TEXT");
+    addColumnIfMissing(this.sqlite, "work_items", "room_id", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "daemon_id", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "renewed_at", "TEXT");
     addColumnIfMissing(this.sqlite, "runtime_leases", "completed_at", "TEXT");
@@ -1727,6 +1731,7 @@ function rowToWorkItem(row: WorkItemRow): WorkItem {
   return WorkItemSchema.parse({
     id: row.id,
     codebaseId: row.codebaseId,
+    roomId: row.roomId ?? undefined,
     title: row.title,
     body: row.body,
     source: row.source,
@@ -1924,6 +1929,7 @@ function filterWorkItems(items: WorkItem[], query: WorkItemListQuery) {
   const q = query.q?.toLowerCase();
   return items.filter((item) => {
     if (query.codebaseId && item.codebaseId !== query.codebaseId) return false;
+    if (query.roomId && item.roomId !== query.roomId) return false;
     if (query.source && item.source !== query.source) return false;
     if (query.status && item.status !== query.status) return false;
     if (query.assignee && item.metadata.assignee !== query.assignee) return false;

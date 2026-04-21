@@ -59,6 +59,7 @@ export const roomTasks = sqliteTable("room_tasks", {
 export const workItems = sqliteTable("work_items", {
   id: text("id").primaryKey(),
   codebaseId: text("codebase_id").notNull(),
+  roomId: text("room_id"),
   title: text("title").notNull(),
   body: text("body").notNull(),
   source: text("source").notNull(),

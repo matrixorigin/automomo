@@ -2,6 +2,7 @@ import { RoomListQuerySchema, SessionListQuerySchema, WorkItemListQuerySchema } 
 
 const knownWorkItemFilters = new Set([
   "codebaseId",
+  "roomId",
   "source",
   "status",
   "assignee",

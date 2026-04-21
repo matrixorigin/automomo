@@ -106,6 +106,7 @@ export const workItems: WorkItem[] = [
   {
     id: "work_1042",
     codebaseId: "codebase_automomo",
+    roomId: "room_shared",
     title: "Reconnect race in realtime queue",
     body: "Preserve session event order and reconnect behavior when a runtime lease resumes.",
     source: "manual",
@@ -119,6 +120,7 @@ export const workItems: WorkItem[] = [
   {
     id: "work_291",
     codebaseId: "codebase_automomo",
+    roomId: "room_handoff",
     title: "Auth guard empty-state clarity",
     body: "Keep runtime status visible when a human needs to reconnect credentials.",
     source: "api",
@@ -132,6 +134,7 @@ export const workItems: WorkItem[] = [
   {
     id: "work_987",
     codebaseId: "codebase_automomo",
+    roomId: "room_shared",
     title: "Shared runtime for high-signal work",
     body: "Make the workspace feel like a working schedule, not a review card wall.",
     source: "manual",

@@ -11,22 +11,23 @@ export const dynamic = "force-dynamic";
 
 export default async function RoomsPage() {
   const api = getApiClient();
-  const [overview, codebases, agents, rooms, workItems] = await Promise.all([
+  const [overview, codebases, agents, rooms] = await Promise.all([
     api.getOverview(),
     api.listCodebases(),
     api.listAgents(),
-    api.listRooms(),
-    api.listWorkItems()
+    api.listRooms()
   ]);
   const roomList = rooms.items;
-  const [roomAgents, roomMessages, roomTasks] = await Promise.all([
+  const [roomAgents, roomMessages, roomTasks, roomWorkItems] = await Promise.all([
     Promise.all(roomList.map((room) => api.listRoomAgents(room.id))),
     Promise.all(roomList.map((room) => api.listRoomMessages(room.id))),
-    Promise.all(roomList.map((room) => api.listRoomTasks(room.id)))
+    Promise.all(roomList.map((room) => api.listRoomTasks(room.id))),
+    Promise.all(roomList.map((room) => api.listRoomWorkItems(room.id)))
   ]);
   const roomMemberships = new Map(roomList.map((room, index) => [room.id, roomAgents[index] ?? []]));
-  const roomMessagesByRoom = new Map(roomList.map((room, index) => [room.id, roomMessages[index] ?? []]));
   const roomTasksByRoom = new Map(roomList.map((room, index) => [room.id, roomTasks[index] ?? []]));
+  const roomWorkItemsByRoom = new Map(roomList.map((room, index) => [room.id, roomWorkItems[index]?.items ?? []]));
+  const allRoomWorkItems = roomWorkItems.flatMap((response) => response.items);
   const recentMessages = [...roomMessages.flat()].sort(byCreatedAtDesc).slice(0, 5);
   const recentTasks = [...roomTasks.flat()].sort(byCreatedAtDesc).slice(0, 5);
 
@@ -40,16 +41,15 @@ export default async function RoomsPage() {
         items={[
           { label: "Rooms", value: roomList.length, caption: "shared spaces" },
           { label: "Members", value: [...roomMemberships.values()].reduce((sum, items) => sum + items.length, 0), caption: "agent joins" },
-          { label: "Tasks", value: roomTasks.flat().length, caption: "room work" }
+          { label: "Work", value: allRoomWorkItems.length, caption: "room cards" }
         ]}
       />
       <DataRows title="Rooms" count={rooms.page.total}>
         {roomList.length === 0 ? <EmptyState title="No rooms" body="Create a room to gather agents, messages, and tasks." /> : null}
         {roomList.map((room) => {
           const members = roomMemberships.get(room.id) ?? [];
-          const messages = roomMessagesByRoom.get(room.id) ?? [];
           const tasks = roomTasksByRoom.get(room.id) ?? [];
-          const latestMessage = messages[0];
+          const work = roomWorkItemsByRoom.get(room.id) ?? [];
           const latestTask = tasks[0];
           const codebase = codebases.find((item) => item.id === room.codebaseId);
           return (
@@ -66,9 +66,34 @@ export default async function RoomsPage() {
                   value: `${members.length} agent${members.length === 1 ? "" : "s"}`,
                   caption: members.map((item) => item.agentId).join(", ") || "none"
                 },
-                { label: "Recent", value: latestMessage ? formatAuthor(latestMessage.author) : "none", caption: latestTask?.title ?? "no tasks" }
+                {
+                  label: "Work",
+                  value: `${work.length} work item${work.length === 1 ? "" : "s"}`,
+                  caption: work[0]?.title ?? latestTask?.title ?? "none"
+                }
               ]}
               action="Open"
+            />
+          );
+        })}
+      </DataRows>
+      <DataRows title="Room work" count={allRoomWorkItems.length}>
+        {allRoomWorkItems.length === 0 ? <EmptyState title="No room work" body="Work items assigned to rooms will appear here." /> : null}
+        {allRoomWorkItems.map((item) => {
+          const room = roomList.find((candidate) => candidate.id === item.roomId);
+          return (
+            <DataRow
+              key={item.id}
+              tone={item.status === "needs_human" ? "yellow" : item.status === "completed" ? "green" : "grey"}
+              title={item.title}
+              subtitle={item.body}
+              code={item.id.toUpperCase()}
+              status={item.status}
+              meta={[
+                { label: "Room", value: room?.name ?? item.roomId ?? "Unassigned", caption: item.priority },
+                { label: "Labels", value: item.labels.join(", ") || "none", caption: item.source }
+              ]}
+              action="Start"
             />
           );
         })}
@@ -93,12 +118,12 @@ export default async function RoomsPage() {
           );
         })}
       </DataRows>
-      <DataRows title="Room tasks" count={recentTasks.length}>
-        {recentTasks.length === 0 ? <EmptyState title="No room tasks" body="Tasks assigned inside a room show up here." /> : null}
+      <DataRows title="Room subtasks" count={recentTasks.length}>
+        {recentTasks.length === 0 ? <EmptyState title="No room subtasks" body="Small checklist tasks can be linked to room work items." /> : null}
         {recentTasks.map((task) => {
           const room = roomList.find((item) => item.id === task.roomId);
           const assigned = agents.find((agent) => agent.id === task.assignedAgentId);
-          const workItem = workItems.items.find((item) => item.id === task.workItemId);
+          const workItem = allRoomWorkItems.find((item) => item.id === task.workItemId);
           return (
             <DataRow
               key={task.id}

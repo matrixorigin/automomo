@@ -17,11 +17,14 @@ describe("list filters and overview", () => {
   it("filters work items, ignores unknown query params, and returns pagination metadata", async () => {
     const app = createApp({ store: new MemoryStore(), now: () => new Date(now) });
     await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Runtime room" }));
+    await app.request("/api/rooms", json({ id: "room_2", codebaseId: "codebase_1", name: "UI room" }));
     await app.request(
       "/api/work-items",
       json({
         id: "work_b",
         codebaseId: "codebase_1",
+        roomId: "room_1",
         title: "Runtime lease handling",
         source: "api",
         status: "ready",
@@ -37,6 +40,7 @@ describe("list filters and overview", () => {
       json({
         id: "work_a",
         codebaseId: "codebase_1",
+        roomId: "room_2",
         title: "UI empty state",
         source: "manual",
         status: "open",
@@ -58,6 +62,10 @@ describe("list filters and overview", () => {
     const paged = await app.request("/api/work-items?limit=1&offset=0");
     const pagedPayload = (await paged.json()) as { items: Array<{ id: string }> };
     expect(pagedPayload.items.map((item) => item.id)).toEqual(["work_a"]);
+
+    const roomFiltered = await app.request("/api/work-items?roomId=room_2");
+    const roomPayload = (await roomFiltered.json()) as { items: Array<{ id: string; roomId?: string }> };
+    expect(roomPayload.items).toEqual([expect.objectContaining({ id: "work_a", roomId: "room_2" })]);
   });
 
   it("filters sessions by runtime, participant, date range, and stable pagination", async () => {

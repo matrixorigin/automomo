@@ -111,6 +111,7 @@ export const ConnectorRefSchema = z.object({
 export const WorkItemSchema = z.object({
   id: IdSchema,
   codebaseId: IdSchema,
+  roomId: IdSchema.optional(),
   title: z.string().trim().min(1),
   body: z.string().default(""),
   source: WorkItemSourceSchema.default("manual"),
@@ -293,6 +294,7 @@ const QueryOffsetSchema = z.coerce.number().int().min(0).default(0);
 
 export const WorkItemListQuerySchema = z.object({
   codebaseId: IdSchema.optional(),
+  roomId: IdSchema.optional(),
   source: WorkItemSourceSchema.optional(),
   status: WorkItemStatusSchema.optional(),
   assignee: z.string().trim().min(1).optional(),
@@ -530,6 +532,7 @@ export const LeaseFailureUploadSchema = z.object({
 
 export const WorkItemUpsertRequestSchema = z.object({
   codebaseId: IdSchema,
+  roomId: IdSchema.optional(),
   connector: ConnectorRefSchema,
   title: z.string().trim().min(1),
   body: z.string().default(""),

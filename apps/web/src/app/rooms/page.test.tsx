@@ -61,6 +61,25 @@ vi.mock("../../lib/api", () => ({
         updatedAt: "2026-04-20T08:00:00.000Z"
       }
     ],
+    listRoomWorkItems: async () => ({
+      items: [
+        {
+          id: "work_1",
+          codebaseId: "codebase_1",
+          roomId: "room_1",
+          title: "Investigate room flow",
+          body: "Use work items as room board cards.",
+          source: "manual",
+          status: "ready",
+          priority: "medium",
+          labels: ["room"],
+          metadata: {},
+          createdAt: "2026-04-20T08:00:00.000Z",
+          updatedAt: "2026-04-20T08:00:00.000Z"
+        }
+      ],
+      page: { limit: 50, offset: 0, total: 1 }
+    }),
     listWorkItems: async () => ({
       items: [{ id: "work_1", codebaseId: "codebase_1", title: "Investigate room flow", body: "", source: "manual", status: "ready", priority: "medium", labels: [], metadata: {}, createdAt: "2026-04-20T08:00:00.000Z", updatedAt: "2026-04-20T08:00:00.000Z" }],
       page: { limit: 50, offset: 0, total: 1 }
@@ -77,6 +96,10 @@ describe("Rooms page", () => {
     expect(html).toContain("Rooms");
     expect(html).toContain("Shared room");
     expect(html).toContain("2 agents");
+    expect(html).toContain("Room work");
+    expect(html).toContain("Investigate room flow");
+    expect(html).toContain("ready");
+    expect(html).toContain("1 work item");
     expect(html).toContain("I am drafting the patch.");
     expect(html).toContain("Draft patch");
     expect(html).toContain('data-json-endpoint="/api/rooms"');

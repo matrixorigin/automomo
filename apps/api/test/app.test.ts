@@ -108,13 +108,13 @@ describe("automomo API", () => {
 
     await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
     await app.request("/api/agents", json({ id: "agent_1", name: "Ralph", instructions: "Work carefully." }));
-    await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Investigate room flow" }));
 
     const roomRes = await app.request(
       "/api/rooms",
       json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" })
     );
     expect(roomRes.status).toBe(201);
+    await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", roomId: "room_1", title: "Investigate room flow" }));
 
     const roomAgentRes = await app.request(
       "/api/rooms/room_1/agents",
@@ -172,6 +172,78 @@ describe("automomo API", () => {
     expect(sessionPayload.session.roomId).toBe("room_1");
   });
 
+  it("creates and lists work items through a room while preserving codebase boundaries", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now) });
+
+    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/codebases", json({ id: "codebase_2", name: "sidecar", provider: "git" }));
+    await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Runtime room" }));
+    await app.request("/api/rooms", json({ id: "room_2", codebaseId: "codebase_2", name: "Foreign room" }));
+
+    const nestedCreate = await app.request(
+      "/api/rooms/room_1/work-items",
+      json({ id: "work_room_1", title: "Build room board", labels: ["ui"], priority: "high" })
+    );
+    expect(nestedCreate.status).toBe(201);
+    const nestedPayload = (await nestedCreate.json()) as { workItem: { codebaseId: string; roomId?: string } };
+    expect(nestedPayload.workItem).toMatchObject({ codebaseId: "codebase_1", roomId: "room_1" });
+
+    const directCreate = await app.request(
+      "/api/work-items",
+      json({ id: "work_room_2", codebaseId: "codebase_1", roomId: "room_1", title: "Direct room work" })
+    );
+    expect(directCreate.status).toBe(201);
+
+    const mismatch = await app.request(
+      "/api/work-items",
+      json({ id: "work_bad", codebaseId: "codebase_1", roomId: "room_2", title: "Bad room work" })
+    );
+    expect(mismatch.status).toBe(409);
+
+    const roomItems = await app.request("/api/rooms/room_1/work-items");
+    const roomItemsPayload = (await roomItems.json()) as { workItems: Array<{ id: string; roomId?: string }> };
+    expect(roomItemsPayload.workItems.map((item) => item.id)).toEqual(["work_room_1", "work_room_2"]);
+    expect(roomItemsPayload.workItems.every((item) => item.roomId === "room_1")).toBe(true);
+  });
+
+  it("starts sessions with room context inherited from work items", async () => {
+    const store = new MemoryStore();
+    const app = createApp({ store, now: () => new Date(now) });
+
+    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Runtime room" }));
+    await app.request("/api/agents", json({ id: "agent_1", name: "Ralph" }));
+    await app.request("/api/runtimes", json({ id: "runtime_1", name: "Local Pi", mode: "local", provider: "pi" }));
+    await app.request(
+      "/api/orchestration-rules",
+      json({
+        id: "rule_1",
+        codebaseId: "codebase_1",
+        name: "Manual room work",
+        trigger: "manual",
+        match: { labels: ["room"] },
+        agentId: "agent_1",
+        runtimeId: "runtime_1"
+      })
+    );
+    await app.request(
+      "/api/work-items",
+      json({
+        id: "work_1",
+        codebaseId: "codebase_1",
+        roomId: "room_1",
+        title: "Room-scoped session",
+        labels: ["room"]
+      })
+    );
+
+    const start = await app.request("/api/work-items/work_1/start", json({ trigger: "manual" }));
+    expect(start.status).toBe(200);
+    const payload = (await start.json()) as { session?: { roomId?: string } };
+    expect(payload.session?.roomId).toBe("room_1");
+  });
+
   it("rejects rooms, room tasks, and sessions that mix codebases", async () => {
     const store = new MemoryStore();
     const app = createApp({ store, now: () => new Date(now) });
@@ -181,6 +253,8 @@ describe("automomo API", () => {
     await app.request("/api/work-items", json({ id: "work_1", codebaseId: "codebase_1", title: "Primary work" }));
     await app.request("/api/work-items", json({ id: "work_2", codebaseId: "codebase_2", title: "Foreign work" }));
     await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" }));
+    await app.request("/api/rooms", json({ id: "room_3", codebaseId: "codebase_1", name: "Other room" }));
+    await app.request("/api/work-items", json({ id: "work_3", codebaseId: "codebase_1", roomId: "room_3", title: "Other room work" }));
 
     const unknownCodebaseRes = await app.request(
       "/api/rooms",
@@ -197,6 +271,16 @@ describe("automomo API", () => {
       })
     );
     expect(mismatchedTaskRes.status).toBe(409);
+
+    const mismatchedRoomTaskRes = await app.request(
+      "/api/rooms/room_1/tasks",
+      json({
+        id: "task_2",
+        title: "Cross-room task",
+        workItemId: "work_3"
+      })
+    );
+    expect(mismatchedRoomTaskRes.status).toBe(409);
 
     const mismatchedSessionRes = await app.request(
       "/api/sessions",
@@ -298,8 +382,12 @@ describe("automomo API", () => {
 
       await firstApp.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
       await firstApp.request(
+        "/api/rooms",
+        json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" })
+      );
+      await firstApp.request(
         "/api/work-items",
-        json({ id: "work_1", codebaseId: "codebase_1", title: "Persist SQLite state" })
+        json({ id: "work_1", codebaseId: "codebase_1", roomId: "room_1", title: "Persist SQLite state" })
       );
       await firstApp.request(
         "/api/agents",
@@ -330,10 +418,6 @@ describe("automomo API", () => {
           agentId: "agent_1",
           runtimeId: "runtime_1"
         })
-      );
-      await firstApp.request(
-        "/api/rooms",
-        json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" })
       );
       await firstApp.request(
         "/api/rooms/room_1/agents",

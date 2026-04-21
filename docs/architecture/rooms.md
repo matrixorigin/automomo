@@ -12,7 +12,20 @@ session thread.
 - A `Room` belongs to a codebase.
 - A `RoomAgent` joins an agent to a room.
 - A `RoomMessage` records human, agent, or system authorship.
-- A `RoomTask` tracks room-local work and can optionally point at a work item.
+- A `WorkItem` can belong to a room through `roomId`; these work items are the
+  primary room board cards.
+- A `RoomTask` tracks smaller room-local checklist work and can optionally point
+  at a work item.
+- A `Session` can carry both `roomId` and `workItemId`, preserving the room
+  context while a runtime executes durable work.
+
+## Human Steering
+
+Humans steer agents by sending room messages, changing work item status or
+assignment, approving handoffs, or editing files directly in the runtime
+workspace. The UI should avoid pretending that every intervention is a
+button-driven workflow; file edits in the runtime are a valid collaboration
+path.
 
 ## Runtime Connection
 
@@ -35,6 +48,8 @@ Rooms do not replace sessions or runtimes. They frame them.
   conversation history.
 - `GET /api/rooms/:id/tasks` and `POST /api/rooms/:id/tasks` manage room-local
   task tracking.
+- `GET /api/rooms/:id/work-items` and `POST /api/rooms/:id/work-items` manage
+  durable work cards scoped to a room.
 - The web app exposes the same concept through the `/rooms` page in the
   Programa-style shell.
 

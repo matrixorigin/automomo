@@ -5,15 +5,17 @@ runtimes. GitHub can feed work into the system, but the core product model is
 source-neutral.
 
 Rooms are the collaboration layer that sits between codebases and execution.
-They group agents, hold messages, and track room-local tasks while preserving
-the room context on sessions that run inside local, daemon, or hosted runtimes.
+They group agents, hold messages, and make room-scoped work items the primary
+board cards while preserving the room context on sessions that run inside local,
+daemon, or hosted runtimes. Room tasks remain available for subtasks and
+checklists under that durable work.
 
 ## System Shape
 
 ```text
 external event or human intent
-  -> work item
-  -> orchestration rule or manual assignment
+  -> room message or work item
+  -> room-scoped work board
   -> session on a reusable runtime
   -> human and agent events
   -> structured outcome
@@ -37,9 +39,13 @@ external event or human intent
 - Room agents are membership records, so the same agent can join multiple
   rooms without changing its runtime identity.
 - Room messages can be written by humans, agents, or the system. They provide
-  the conversational trail around a piece of work.
+  the conversational trail around a piece of work, and humans can also steer by
+  changing assignment/status, approving handoffs, or editing runtime files
+  directly.
+- Work items can carry `roomId`, which makes them the primary room board cards
+  and keeps the global work page able to group progress by room.
 - Room tasks can be assigned to an agent and optionally linked to a work item,
-  which keeps the room view tied back to codebase work.
+  which keeps room-local subtasks tied back to codebase work.
 - When a session is created with a room id, the session keeps that room
   context so local and daemon runtimes can preserve the shared collaboration
   frame while they execute.

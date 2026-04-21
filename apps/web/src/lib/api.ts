@@ -18,7 +18,8 @@ import {
   SessionListQuery,
   SessionListResponseSchema,
   WorkItemListQuery,
-  WorkItemListResponseSchema
+  WorkItemListResponseSchema,
+  WorkItemSchema
 } from "@automomo/protocol";
 
 export interface AutomomoApiClientOptions {
@@ -60,6 +61,9 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     },
     async listWorkItems(query: Partial<WorkItemListQuery> = {}) {
       return WorkItemListResponseSchema.parse(await get(`/api/work-items${serializeQuery(query)}`));
+    },
+    async listRoomWorkItems(roomId: string) {
+      return WorkItemListResponseSchema.parse(await get(`/api/rooms/${roomId}/work-items`));
     },
     async listOrchestrationRules() {
       const payload = (await get("/api/orchestration-rules")) as { orchestrationRules: unknown[] };
@@ -124,6 +128,10 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     async createRoomTask(roomId: string, body: Record<string, unknown>) {
       const payload = (await post(`/api/rooms/${roomId}/tasks`, body)) as { roomTask: unknown };
       return RoomTaskCreateResponseSchema.parse(payload).roomTask;
+    },
+    async createRoomWorkItem(roomId: string, body: Record<string, unknown>) {
+      const payload = (await post(`/api/rooms/${roomId}/work-items`, body)) as { workItem: unknown };
+      return WorkItemSchema.parse(payload.workItem);
     }
   };
 }

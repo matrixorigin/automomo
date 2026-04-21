@@ -14,12 +14,21 @@ export function upsertWorkItemFromSource(input: {
   const existing = input.store
     .listWorkItems()
     .find((item) => item.connector?.type === input.request.connector.type && connectorMatches(item.connector, input.request.connector));
+  const roomId = input.request.roomId ?? existing?.roomId;
+  const room = roomId ? input.store.getRoom(roomId) : undefined;
+  if (roomId && !room) {
+    throw new Error(`unknown room ${roomId}`);
+  }
+  if (room && room.codebaseId !== input.request.codebaseId) {
+    throw new Error(`room ${room.id} does not belong to codebase ${input.request.codebaseId}`);
+  }
   const idFactory = input.idFactory ?? defaultId;
   const created = existing === undefined;
   const status = nextStatus(existing?.status, input.request.status);
   const workItem = input.store.saveWorkItem({
     id: existing?.id ?? idFactory("work"),
     codebaseId: input.request.codebaseId,
+    roomId,
     title: input.request.title,
     body: input.request.body,
     source: input.request.source,

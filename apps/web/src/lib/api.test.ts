@@ -63,6 +63,9 @@ describe("automomo web API client", () => {
         if (url.endsWith("/api/rooms/room_1/tasks")) {
           return Response.json({ roomTasks: [] });
         }
+        if (url.endsWith("/api/rooms/room_1/work-items")) {
+          return Response.json({ workItems: [], items: [], page: { limit: 50, offset: 0, total: 0 } });
+        }
         if (url.endsWith("/api/agents")) {
           return Response.json({ agents: [] });
         }
@@ -79,6 +82,7 @@ describe("automomo web API client", () => {
     await expect(client.listRoomAgents("room_1")).resolves.toEqual([]);
     await expect(client.listRoomMessages("room_1")).resolves.toEqual([]);
     await expect(client.listRoomTasks("room_1")).resolves.toEqual([]);
+    await expect(client.listRoomWorkItems("room_1")).resolves.toMatchObject({ items: [], page: { total: 0 } });
     await expect(client.listAgents()).resolves.toEqual([]);
     await expect(client.listRuntimes()).resolves.toEqual([]);
     await expect(client.listSessions({ status: "queued" })).resolves.toMatchObject({ page: { total: 0 } });
@@ -118,12 +122,31 @@ describe("automomo web API client", () => {
             }
           });
         }
+        if (String(input).endsWith("/api/rooms/room_1/work-items")) {
+          return Response.json({
+            workItem: {
+              id: "work_1",
+              codebaseId: "codebase_1",
+              roomId: "room_1",
+              title: "Room work",
+              body: "",
+              source: "manual",
+              status: "open",
+              priority: "medium",
+              labels: [],
+              metadata: {},
+              createdAt: now,
+              updatedAt: now
+            }
+          });
+        }
         return Response.json({});
       }
     });
 
     await client.createAgent({ name: "Ralph" });
     await client.createRoom({ codebaseId: "codebase_1", name: "Shared room" });
+    await client.createRoomWorkItem("room_1", { title: "Room work" });
 
     expect(requests).toEqual([
       {
@@ -140,6 +163,14 @@ describe("automomo web API client", () => {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ codebaseId: "codebase_1", name: "Shared room" })
+        })
+      },
+      {
+        url: "http://automomo.test/api/rooms/room_1/work-items",
+        init: expect.objectContaining({
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "Room work" })
         })
       }
     ]);
