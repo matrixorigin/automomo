@@ -12,6 +12,7 @@ import { SessionDetailPanel } from "./SessionDetailPanel";
 import { StatusStrip } from "./StatusStrip";
 import { buildAgentPayload } from "./AgentEditor";
 import { buildRuntimePayload } from "./RuntimeEditor";
+import { AgentAvatar } from "./AgentAvatar";
 
 const now = "2026-04-20T08:00:00.000Z";
 
@@ -185,6 +186,22 @@ describe("operational web components", () => {
     expect(html).toContain("Human input requested");
     expect(html).toContain("Claim");
     expect(html).toContain("Approve");
+  });
+
+  it("renders agent avatar with deterministic visuals and accessible title", () => {
+    const html = renderToStaticMarkup(
+      <AgentAvatar
+        agent={{
+          id: "agent_1",
+          name: "Ralph",
+          metadata: { color: "#3B82F6", icon: "robot" }
+        }}
+      />
+    );
+
+    expect(html).toContain("title=\"Agent Ralph (robot)\"");
+    expect(html).toContain("background:#3B82F6");
+    expect(html).toContain(">R<");
   });
 });
 
