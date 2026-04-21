@@ -667,6 +667,87 @@ a {
   padding: 22px 30px 10px;
 }
 
+.room-workspace {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.room-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 30px 14px;
+}
+
+.room-header-copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.room-header-copy h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.room-header-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.room-header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.room-runtime-presence {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-workspace-tabs {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 30px;
+}
+
+.room-workspace-panel {
+  min-width: 0;
+}
+
+.room-tab-support {
+  margin-top: 22px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.session-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.4fr) minmax(0, 1fr);
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.session-row strong,
+.session-row span {
+  display: block;
+}
+
+.session-row span,
+.session-row p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .room-hero p {
   max-width: 760px;
   margin: 0;

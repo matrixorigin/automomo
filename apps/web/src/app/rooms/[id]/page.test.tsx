@@ -80,25 +80,67 @@ vi.mock("../../../lib/api", () => ({
         }
       ],
       page: { limit: 50, offset: 0, total: 1 }
-    })
+    }),
+    listSessions: async (query: { roomId?: string }) => ({
+      items: [
+        {
+          id: "session_1",
+          codebaseId: "codebase_1",
+          roomId: query.roomId ?? "room_1",
+          workItemId: "work_1",
+          agentId: "agent_1",
+          runtimeId: "runtime_1",
+          status: "running",
+          participants: [
+            { type: "human", name: "Operator" },
+            { type: "agent", name: "Ralph", id: "agent_1" }
+          ],
+          metadata: {},
+          createdAt: "2026-04-20T08:00:00.000Z",
+          startedAt: "2026-04-20T08:00:00.000Z",
+          updatedAt: "2026-04-20T08:00:00.000Z"
+        }
+      ],
+      page: { limit: 50, offset: 0, total: 1 }
+    }),
+    listRuntimes: async () => [
+      {
+        id: "runtime_1",
+        name: "Pi Runtime",
+        mode: "local",
+        provider: "pi",
+        environment: { networkPolicy: "restricted", env: {}, secretRefs: [] },
+        status: "online",
+        capacity: 2,
+        activeSessions: 1,
+        metadata: {},
+        createdAt: "2026-04-20T08:00:00.000Z",
+        updatedAt: "2026-04-20T08:00:00.000Z"
+      }
+    ]
   })
 }));
 
 describe("Room detail page", () => {
-  it("renders a room workspace with chat, mentions, work, and agent join controls", async () => {
+  it("renders a room workspace header and tabs with legacy controls inside tab content", async () => {
     const { default: RoomDetailPage } = await import("./page");
     const html = renderToStaticMarkup(await RoomDetailPage({ params: Promise.resolve({ id: "room_1" }) }));
 
     expect(html).toContain("Shared room");
-    expect(html).toContain("Room chat");
+    expect(html).toContain("2 agents joined");
+    expect(html).toContain("Runtime presence");
+    expect(html).toContain("Chat");
+    expect(html).toContain("Board");
+    expect(html).toContain("Sessions");
+    expect(html).toContain("Outcomes");
     expect(html).toContain("@Ralph");
     expect(html).toContain("@all");
     expect(html).toContain("Send message");
     expect(html).toContain("Add agent");
     expect(html).toContain("Nova");
     expect(html).toContain("Kai");
-    expect(html).toContain("New room work");
+    expect(html).toContain("Create room work item");
     expect(html).toContain("Investigate room flow");
-    expect(html).toContain("Room subtasks");
+    expect(html).not.toContain("Room action");
   });
 });
