@@ -8,7 +8,7 @@ import { RoomAgentJoinForm } from "../../../components/RoomAgentJoinForm";
 import { RoomChatComposer } from "../../../components/RoomChatComposer";
 import { RoomHeader } from "../../../components/RoomHeader";
 import { RoomRuntimePresence } from "../../../components/RoomRuntimePresence";
-import { RoomWorkItemForm } from "../../../components/RoomWorkItemForm";
+import { RoomWorkBoard } from "../../../components/RoomWorkBoard";
 import { RoomWorkspace } from "../../../components/RoomWorkspace";
 import { getApiClient } from "../../../lib/api";
 
@@ -89,30 +89,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
         }
         boardContent={
           <section className="schedule">
-            <div className="floor-heading">
-              <h2>
-                Create room work item <span>+</span>
-              </h2>
-            </div>
-            <RoomWorkItemForm roomId={room.id} />
-            <DataRows title="Room work" count={roomWorkItems.page.total}>
-              {roomWorkItems.items.length === 0 ? <EmptyState title="No room work" body="Add durable room work to create a board card." /> : null}
-              {roomWorkItems.items.map((item) => (
-                <DataRow
-                  key={item.id}
-                  tone={item.status === "needs_human" ? "yellow" : item.status === "completed" ? "green" : "grey"}
-                  title={item.title}
-                  subtitle={item.body}
-                  code={item.id.toUpperCase()}
-                  status={item.status}
-                  meta={[
-                    { label: "Priority", value: item.priority, caption: item.source },
-                    { label: "Labels", value: item.labels.join(", ") || "none", caption: room.name }
-                  ]}
-                  action="Start"
-                />
-              ))}
-            </DataRows>
+            <RoomWorkBoard roomId={room.id} initialItems={roomWorkItems.items} />
             <DataRows title="Room subtasks" count={tasks.length}>
               {tasks.length === 0 ? <EmptyState title="No subtasks" body="Small checklist tasks linked to room work appear here." /> : null}
               {tasks.map((task) => {

@@ -4,6 +4,22 @@ import { describe, expect, it, vi } from "vitest";
 import RoomDetailPage from "./page";
 
 vi.mock("../../../lib/api", () => ({
+  createAutomomoApiClient: () => ({
+    updateWorkItem: async () => ({
+      id: "work_1",
+      codebaseId: "codebase_1",
+      roomId: "room_1",
+      title: "Investigate room flow",
+      body: "Use work items as room board cards.",
+      source: "manual",
+      status: "ready",
+      priority: "medium",
+      labels: ["room"],
+      metadata: {},
+      createdAt: "2026-04-20T08:00:00.000Z",
+      updatedAt: "2026-04-20T08:00:00.000Z"
+    })
+  }),
   getApiClient: () => ({
     getOverview: async () => ({
       counts: { codebases: 1, workItems: 1, sessions: 0, agents: 2, runtimes: 1 },
@@ -140,8 +156,9 @@ describe("Room detail page", () => {
     expect(html).toContain("Add agent");
     expect(html).toContain("Nova");
     expect(html).toContain("Kai");
-    expect(html).toContain("Create room work item");
+    expect(html).toContain("Room board");
     expect(html).toContain("Investigate room flow");
+    expect(html).toContain("data-work-item-patch-endpoint");
     expect(html).not.toContain("Room action");
   });
 });

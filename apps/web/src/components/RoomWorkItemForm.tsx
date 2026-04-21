@@ -3,10 +3,11 @@
 import React from "react";
 import { commaList, optionalString, submitJsonForm } from "./jsonSubmit";
 
-export function RoomWorkItemForm({ roomId }: { roomId: string }) {
+export function RoomWorkItemForm({ roomId, className }: { roomId: string; className?: string }) {
+  const classes = ["editor-panel", className].filter(Boolean).join(" ");
   return (
     <form
-      className="editor-panel"
+      className={classes}
       data-json-endpoint={`/api/rooms/${roomId}/work-items`}
       onSubmit={submitJsonForm(`/api/rooms/${roomId}/work-items`, (formData) => ({
         title: optionalString(formData.get("title")),
@@ -47,7 +48,7 @@ export function RoomWorkItemForm({ roomId }: { roomId: string }) {
         <span>Body</span>
         <textarea name="body" rows={3} />
       </label>
-      <button type="submit">Add work</button>
+      <button type="submit">Add to board</button>
     </form>
   );
 }

@@ -23,7 +23,7 @@ export default async function WorkItemsPage() {
   const workGroups = groupWorkByRoom(workItems.items, rooms.items);
   return (
     <AppShell active="Work Items" overview={overview} rooms={rooms.items} agents={agents}>
-      <WorkspaceHeader section="Work Items" title="Work queue" action="New item" />
+      <WorkspaceHeader section="Work Items" title="Across rooms" action="New item" />
       <div className="mode-row" aria-label="Work item controls">
         <div className="tabs" role="tablist" aria-label="Status filter">
           <button className="tab active" type="button">All</button>
@@ -43,7 +43,7 @@ export default async function WorkItemsPage() {
         ]}
       />
       {workGroups.length === 0 ? (
-        <DataRows title="Current items" count={workItems.page.total}>
+        <DataRows title="Across rooms" count={workItems.page.total}>
           <EmptyState title="No work items" body="Work from manual, API, sync, or webhook sources will appear here." />
         </DataRows>
       ) : null}
@@ -60,7 +60,8 @@ export default async function WorkItemsPage() {
                 { label: "Priority", value: item.priority, caption: item.source },
                 { label: "Room", value: group.title, caption: item.labels[0] ?? item.codebaseId }
               ]}
-              action="Start"
+              action={item.roomId ? "Open room" : "View rooms"}
+              actionHref={item.roomId ? `/rooms/${item.roomId}` : "/rooms"}
             />
           ))}
         </DataRows>

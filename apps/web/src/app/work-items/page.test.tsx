@@ -67,9 +67,11 @@ describe("Work Items page", () => {
     const { default: WorkItemsPage } = await import("./page");
     const html = renderToStaticMarkup(await WorkItemsPage());
 
+    expect(html).toContain("Across rooms");
     expect(html).toContain("Runtime room");
     expect(html).toContain("Unassigned");
     expect(html).toContain("Room work");
     expect(html).toContain("Global work");
+    expect(html).toContain('href="/rooms/room_1"');
   });
 });
