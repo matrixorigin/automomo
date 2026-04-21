@@ -1,9 +1,22 @@
 "use client";
 
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import { roomWorkspaceTabs, RoomWorkspaceTabId, RoomWorkspaceTabs } from "./RoomWorkspaceTabs";
 
 type RoomWorkspacePanelMap = Record<RoomWorkspaceTabId, ReactNode>;
+
+export function roomWorkspaceTabFromHash(hash: string): RoomWorkspaceTabId {
+  const tabId = hash.replace(/^#/, "");
+  return roomWorkspaceTabs.some((tab) => tab.id === tabId) ? (tabId as RoomWorkspaceTabId) : "chat";
+}
+
+function setRoomWorkspaceHash(tabId: RoomWorkspaceTabId) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const hash = tabId === "chat" ? "" : `#${tabId}`;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+}
 
 export function RoomWorkspace({
   header,
@@ -27,12 +40,22 @@ export function RoomWorkspace({
     sessions: sessionsContent,
     outcomes: outcomesContent
   };
+  useEffect(() => {
+    const syncTabFromHash = () => setActiveTabId(roomWorkspaceTabFromHash(window.location.hash));
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
+  const changeTab = (tabId: RoomWorkspaceTabId) => {
+    setActiveTabId(tabId);
+    setRoomWorkspaceHash(tabId);
+  };
 
   return (
     <section className="room-workspace">
       {header}
       <div className="room-workspace-tabs">
-        <RoomWorkspaceTabs activeTabId={activeTabId} onTabChange={setActiveTabId} />
+        <RoomWorkspaceTabs activeTabId={activeTabId} onTabChange={changeTab} />
       </div>
       {contextContent ? <section className="room-workspace-context">{contextContent}</section> : null}
       {roomWorkspaceTabs.map((tab) => {
