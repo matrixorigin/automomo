@@ -1,9 +1,15 @@
 import { AppShell } from "@/components/AppShell";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
+import { getApiClient } from "@/lib/api";
 
-export default function SettingsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  const api = getApiClient();
+  const [overview, rooms, agents] = await Promise.all([api.getOverview(), api.listRooms(), api.listAgents()]);
+
   return (
-    <AppShell active="Settings">
+    <AppShell active="Settings" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Settings" title="Workspace settings" action="Save" />
       <section className="settings-grid">
         <label>

@@ -10,9 +10,14 @@ export const dynamic = "force-dynamic";
 
 export default async function RuntimesPage() {
   const api = getApiClient();
-  const [overview, runtimes] = await Promise.all([api.getOverview(), api.listRuntimes()]);
+  const [overview, runtimes, rooms, agents] = await Promise.all([
+    api.getOverview(),
+    api.listRuntimes(),
+    api.listRooms(),
+    api.listAgents()
+  ]);
   return (
-    <AppShell active="Runtimes" overview={overview}>
+    <AppShell active="Runtimes" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Runtimes" title="Reusable code and environment" action="Pair daemon" />
       <section className="schedule">
         <RuntimeEditor />

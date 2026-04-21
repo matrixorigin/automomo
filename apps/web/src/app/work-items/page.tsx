@@ -10,10 +10,19 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkItemsPage() {
   const api = getApiClient();
-  const [overview, workItems, rooms] = await Promise.all([api.getOverview(), api.listWorkItems(), api.listRooms()]);
+  const maybeListAgents = (api as {
+    listAgents?: () => Promise<Array<{ id: string; name: string; metadata?: Record<string, unknown> }>>;
+  }).listAgents;
+  const agentsPromise = typeof maybeListAgents === "function" ? maybeListAgents() : Promise.resolve([]);
+  const [overview, workItems, rooms, agents] = await Promise.all([
+    api.getOverview(),
+    api.listWorkItems(),
+    api.listRooms(),
+    agentsPromise
+  ]);
   const workGroups = groupWorkByRoom(workItems.items, rooms.items);
   return (
-    <AppShell active="Work Items" overview={overview}>
+    <AppShell active="Work Items" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Work Items" title="Work queue" action="New item" />
       <div className="mode-row" aria-label="Work item controls">
         <div className="tabs" role="tablist" aria-label="Status filter">

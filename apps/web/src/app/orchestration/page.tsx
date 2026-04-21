@@ -9,15 +9,16 @@ export const dynamic = "force-dynamic";
 
 export default async function OrchestrationPage() {
   const api = getApiClient();
-  const [overview, codebases, agents, orchestrationRules, runtimes] = await Promise.all([
+  const [overview, codebases, agents, orchestrationRules, runtimes, rooms] = await Promise.all([
     api.getOverview(),
     api.listCodebases(),
     api.listAgents(),
     api.listOrchestrationRules(),
-    api.listRuntimes()
+    api.listRuntimes(),
+    api.listRooms()
   ]);
   return (
-    <AppShell active="Orchestration" overview={overview}>
+    <AppShell active="Orchestration" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Orchestration" title="Routing rules" action="New rule" />
       <section className="schedule">
         <RuleEditor codebases={codebases} agents={agents} runtimes={runtimes} />

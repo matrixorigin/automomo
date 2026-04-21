@@ -1,19 +1,39 @@
 import Link from "next/link";
+import type { Agent, Overview, Room, RoomStatus } from "@automomo/protocol";
 import React, { ReactNode } from "react";
-import { Overview } from "@automomo/protocol";
+import { AgentAvatar } from "./AgentAvatar";
 import { StatusStrip } from "./StatusStrip";
 
-const navItems = [
-  { href: "/", label: "Overview" },
+const workspaceItems = [{ href: "/", label: "Home" }];
+const operationsItems = [
   { href: "/work-items", label: "Work Items" },
-  { href: "/orchestration", label: "Orchestration" },
   { href: "/sessions", label: "Sessions" },
-  { href: "/rooms", label: "Rooms" },
-  { href: "/agents", label: "Agents" },
-  { href: "/runtimes", label: "Runtimes" }
-];
+  { href: "/runtimes", label: "Runtimes" },
+  { href: "/orchestration", label: "Orchestration" }
+] as const;
 
-export function AppShell({ active, children, overview }: { active: string; children: ReactNode; overview?: Overview }) {
+export type ShellRoom = Pick<Room, "id" | "name"> & {
+  status?: RoomStatus;
+};
+export type ShellAgent = Pick<Agent, "id" | "name"> & {
+  metadata?: Agent["metadata"];
+};
+
+export function AppShell({
+  active,
+  activeRoomId,
+  rooms = [],
+  agents = [],
+  children,
+  overview
+}: {
+  active: string;
+  activeRoomId?: string;
+  rooms?: ShellRoom[];
+  agents?: ShellAgent[];
+  children: ReactNode;
+  overview?: Overview;
+}) {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Workspace navigation">
@@ -27,14 +47,17 @@ export function AppShell({ active, children, overview }: { active: string; child
             <strong>automomo</strong>
             <p>Codebase workspace</p>
           </div>
-          <Link className="icon-button" aria-label="Settings" href="/settings">
+          <Link className={`icon-button ${active === "Settings" ? "active" : ""}`} aria-label="Settings" href="/settings">
             Setup
           </Link>
         </div>
 
-        <nav className="nav-block" aria-label="Main">
-          {navItems.map((item) => (
-            <Link key={item.href} className={`nav-item ${active === item.label ? "active" : ""}`} href={item.href}>
+        <div className="nav-section">
+          <span>Workspace</span>
+        </div>
+        <nav className="nav-block" aria-label="Workspace">
+          {workspaceItems.map((item) => (
+            <Link key={item.href} className={itemClass(active === item.label)} href={item.href}>
               <span className="stack-icon" aria-hidden="true" />
               {item.label}
             </Link>
@@ -42,21 +65,57 @@ export function AppShell({ active, children, overview }: { active: string; child
         </nav>
 
         <div className="nav-section">
-          <span>Runtime Tools</span>
+          <span>Rooms</span>
         </div>
-        <nav className="nav-block compact" aria-label="Runtime tools">
-          <a className="nav-item" href="#handoffs">
-            <span className="line-icon" aria-hidden="true" />
-            Human Handoffs
-          </a>
-          <a className="nav-item" href="#outcomes">
+        <nav className="nav-block compact" aria-label="Rooms">
+          <Link className={itemClass(active === "Rooms" && !activeRoomId)} href="/rooms">
+            <span className="stack-icon" aria-hidden="true" />
+            All rooms
+          </Link>
+          {rooms.map((room) => (
+            <Link key={room.id} className={itemClass(activeRoomId === room.id)} href={`/rooms/${room.id}`}>
+              <span className="line-icon" aria-hidden="true" />
+              {room.name}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="nav-section">
+          <span>Agents</span>
+        </div>
+        <nav className="nav-block compact" aria-label="Agents">
+          <Link className={itemClass(active === "Agents")} href="/agents">
             <span className="doc-icon" aria-hidden="true" />
-            Outcomes
-          </a>
-          <a className="nav-item" href="#leases">
-            <span className="hour-icon" aria-hidden="true" />
-            Lease Queue
-          </a>
+            All agents
+          </Link>
+          {agents.map((agent) => (
+            <Link key={agent.id} className="nav-item" href={`/agents#${agent.id}`}>
+              <AgentAvatar agent={{ ...agent, metadata: agent.metadata ?? {} }} />
+              {agent.name}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="nav-section">
+          <span>Operations</span>
+        </div>
+        <nav className="nav-block compact" aria-label="Operations">
+          {operationsItems.map((item) => (
+            <Link key={item.href} className={itemClass(active === item.label)} href={item.href}>
+              <span className="hour-icon" aria-hidden="true" />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="nav-section">
+          <span>Settings</span>
+        </div>
+        <nav className="nav-block compact" aria-label="Settings">
+          <Link className={itemClass(active === "Settings")} href="/settings">
+            <span className="line-icon" aria-hidden="true" />
+            Workspace settings
+          </Link>
         </nav>
 
         <div className="upgrade">
@@ -74,4 +133,8 @@ export function AppShell({ active, children, overview }: { active: string; child
       </main>
     </div>
   );
+}
+
+function itemClass(active: boolean) {
+  return `nav-item ${active ? "active" : ""}`;
 }

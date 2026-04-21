@@ -9,9 +9,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AgentsPage() {
   const api = getApiClient();
-  const [overview, agents, runtimes] = await Promise.all([api.getOverview(), api.listAgents(), api.listRuntimes()]);
+  const [overview, agents, runtimes, rooms] = await Promise.all([
+    api.getOverview(),
+    api.listAgents(),
+    api.listRuntimes(),
+    api.listRooms()
+  ]);
   return (
-    <AppShell active="Agents" overview={overview}>
+    <AppShell active="Agents" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Agents" title="Agent studio" action="New agent" />
       <section className="schedule">
         <AgentEditor runtimes={runtimes} />

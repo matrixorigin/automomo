@@ -32,7 +32,7 @@ export default async function RoomsPage() {
   const recentTasks = [...roomTasks.flat()].sort(byCreatedAtDesc).slice(0, 5);
 
   return (
-    <AppShell active="Rooms" overview={overview}>
+    <AppShell active="Rooms" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Rooms" title="Room collaboration" action="New room" />
       <section className="schedule">
         <RoomEditor codebases={codebases} />

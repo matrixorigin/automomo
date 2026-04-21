@@ -9,9 +9,14 @@ export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
   const api = getApiClient();
-  const [overview, workItems] = await Promise.all([api.getOverview(), api.listWorkItems({ limit: 5 })]);
+  const [overview, workItems, rooms, agents] = await Promise.all([
+    api.getOverview(),
+    api.listWorkItems({ limit: 5 }),
+    api.listRooms(),
+    api.listAgents()
+  ]);
   return (
-    <AppShell active="Overview" overview={overview}>
+    <AppShell active="Home" overview={overview} rooms={rooms.items} agents={agents}>
       <WorkspaceHeader section="Overview" title="Shared codebase operations" action="Create work" />
       <Totals
         items={[
