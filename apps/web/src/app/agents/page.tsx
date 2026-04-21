@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { AgentEditor } from "@/components/AgentEditor";
-import { DataRow, DataRows } from "@/components/DataRows";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import { DataRows } from "@/components/DataRows";
 import { EmptyState } from "@/components/EmptyState";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
 import { getApiClient } from "@/lib/api";
@@ -26,18 +27,30 @@ export default async function AgentsPage() {
         {agents.map((agent) => {
           const runtime = runtimes.find((item) => item.id === agent.defaultRuntimeId);
           return (
-            <DataRow
-              key={agent.id}
-              title={agent.name}
-              subtitle={agent.instructions}
-              code={agent.id.toUpperCase()}
-              status="ready"
-              meta={[
-                { label: "Model", value: agent.model ?? "default", caption: `${agent.maxConcurrency} slot` },
-                { label: "Runtime", value: runtime?.name ?? "none", caption: runtime?.provider ?? "missing" }
-              ]}
-              action="Configure"
-            />
+            <article className="schedule-row" key={agent.id}>
+              <div className="asset-thumb thumb-grey">
+                <AgentAvatar agent={agent} />
+              </div>
+              <div className="item-main">
+                <strong>{agent.name}</strong>
+                <small>{agent.instructions}</small>
+                <span>{agent.id.toUpperCase()}</span>
+              </div>
+              <div className="item-meta">
+                <small>Model</small>
+                <strong>{agent.model ?? "default"}</strong>
+                <span>{agent.maxConcurrency} slot</span>
+              </div>
+              <div className="item-meta">
+                <small>Runtime</small>
+                <strong>{runtime?.name ?? "none"}</strong>
+                <span>{runtime?.provider ?? "missing"}</span>
+              </div>
+              <div className="row-actions">
+                <button type="button">Configure</button>
+                <span className="status-pill status-ready">ready</span>
+              </div>
+            </article>
           );
         })}
       </DataRows>

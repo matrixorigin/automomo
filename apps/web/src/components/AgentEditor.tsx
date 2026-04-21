@@ -3,7 +3,15 @@
 import React from "react";
 import { commaList, numberValue, optionalString, submitJsonForm } from "./jsonSubmit";
 
+const AGENT_COLOR_OPTIONS = ["#3B82F6", "#14B8A6", "#F59E0B", "#EF4444", "#8B5CF6", "#10B981", "#0EA5E9", "#F97316"];
+const AGENT_ICON_OPTIONS = ["robot", "bolt", "code", "shield", "wrench", "sparkles"];
+
 export function buildAgentPayload(formData: FormData) {
+  const metadata = compact({
+    color: optionalString(formData.get("color")),
+    icon: optionalString(formData.get("icon"))
+  });
+
   return compact({
     name: optionalString(formData.get("name")),
     model: optionalString(formData.get("model")),
@@ -11,7 +19,8 @@ export function buildAgentPayload(formData: FormData) {
     skills: commaList(formData.get("skills")),
     tools: commaList(formData.get("tools")),
     defaultRuntimeId: optionalString(formData.get("defaultRuntimeId")),
-    maxConcurrency: numberValue(formData.get("maxConcurrency"), 1)
+    maxConcurrency: numberValue(formData.get("maxConcurrency"), 1),
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined
   });
 }
 
@@ -37,6 +46,26 @@ export function AgentEditor({ runtimes }: { runtimes: { id: string; name: string
       <label>
         <span>Tools</span>
         <input name="tools" placeholder="shell,git" />
+      </label>
+      <label>
+        <span>Color</span>
+        <select name="color" defaultValue={AGENT_COLOR_OPTIONS[0]}>
+          {AGENT_COLOR_OPTIONS.map((color) => (
+            <option key={color} value={color}>
+              {color}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Icon</span>
+        <select name="icon" defaultValue={AGENT_ICON_OPTIONS[0]}>
+          {AGENT_ICON_OPTIONS.map((icon) => (
+            <option key={icon} value={icon}>
+              {icon}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         <span>Default runtime</span>

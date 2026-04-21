@@ -118,10 +118,19 @@ describe("operational web components", () => {
           skills: "runtime, testing",
           tools: "shell, git",
           defaultRuntimeId: "runtime_1",
-          maxConcurrency: "2"
+          maxConcurrency: "2",
+          color: "#3B82F6",
+          icon: "robot"
         })
       )
-    ).toMatchObject({ skills: ["runtime", "testing"], tools: ["shell", "git"], maxConcurrency: 2 });
+    ).toMatchObject({
+      skills: ["runtime", "testing"],
+      tools: ["shell", "git"],
+      maxConcurrency: 2,
+      metadata: { color: "#3B82F6", icon: "robot" }
+    });
+    expect(html).toContain('name="color"');
+    expect(html).toContain('name="icon"');
     expect(
       buildRulePayload(
         formData({
