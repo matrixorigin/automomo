@@ -17,6 +17,14 @@ function json(body: unknown, headers: Record<string, string> = {}) {
   };
 }
 
+function patchJson(body: unknown, headers: Record<string, string> = {}) {
+  return {
+    method: "PATCH",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body)
+  };
+}
+
 describe("automomo API", () => {
   it("creates codebase, work item, session events, handoff, and outcome through generic product nouns", async () => {
     const store = new MemoryStore();
@@ -251,6 +259,88 @@ describe("automomo API", () => {
     expect(start.status).toBe(200);
     const payload = (await start.json()) as { session?: { roomId?: string } };
     expect(payload.session?.roomId).toBe("room_1");
+  });
+
+  it("updates work items via PATCH while preserving immutable fields and codebase boundaries", async () => {
+    const store = new MemoryStore();
+    let current = now;
+    const app = createApp({ store, now: () => new Date(current) });
+
+    await app.request("/api/codebases", json({ id: "codebase_1", name: "automomo", provider: "git" }));
+    await app.request("/api/codebases", json({ id: "codebase_2", name: "sidecar", provider: "git" }));
+    await app.request("/api/rooms", json({ id: "room_1", codebaseId: "codebase_1", name: "Shared room" }));
+    await app.request("/api/rooms", json({ id: "room_2", codebaseId: "codebase_1", name: "Other room" }));
+    await app.request("/api/rooms", json({ id: "room_3", codebaseId: "codebase_2", name: "Foreign room" }));
+    await app.request(
+      "/api/work-items",
+      json({
+        id: "work_1",
+        codebaseId: "codebase_1",
+        roomId: "room_1",
+        title: "Initial work",
+        status: "open"
+      })
+    );
+
+    current = later;
+    const updated = await app.request(
+      "/api/work-items/work_1",
+      patchJson({
+        id: "work_mutated",
+        codebaseId: "codebase_2",
+        title: "Updated work",
+        body: "Patch route body",
+        status: "running",
+        priority: "high",
+        labels: ["board", "active"],
+        roomId: "room_2",
+        metadata: { source: "patch" },
+        createdAt: "2000-01-01T00:00:00.000Z",
+        updatedAt: "2000-01-01T00:00:00.000Z"
+      })
+    );
+    expect(updated.status).toBe(200);
+    const updatedPayload = (await updated.json()) as {
+      workItem: {
+        id: string;
+        codebaseId: string;
+        title: string;
+        body: string;
+        status: string;
+        priority: string;
+        labels: string[];
+        roomId?: string;
+        metadata: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+      };
+    };
+    expect(updatedPayload.workItem).toMatchObject({
+      id: "work_1",
+      codebaseId: "codebase_1",
+      title: "Updated work",
+      body: "Patch route body",
+      status: "running",
+      priority: "high",
+      labels: ["board", "active"],
+      roomId: "room_2",
+      metadata: { source: "patch" },
+      createdAt: now,
+      updatedAt: later
+    });
+
+    const lastAudit = store.listAuditEvents().at(-1);
+    expect(lastAudit?.action).toBe("work_item.update");
+    expect(lastAudit?.targetId).toBe("work_1");
+
+    const invalidStatus = await app.request("/api/work-items/work_1", patchJson({ status: "not_a_real_status" }));
+    expect(invalidStatus.status).toBe(400);
+
+    const unknown = await app.request("/api/work-items/work_missing", patchJson({ status: "running" }));
+    expect(unknown.status).toBe(404);
+
+    const crossCodebase = await app.request("/api/work-items/work_1", patchJson({ roomId: "room_3" }));
+    expect(crossCodebase.status).toBe(409);
   });
 
   it("rejects rooms, room tasks, and sessions that mix codebases", async () => {

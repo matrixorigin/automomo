@@ -69,6 +69,9 @@ const createWorkItemBody = WorkItemSchema.partial({
   createdAt: true,
   updatedAt: true
 });
+const patchWorkItemBody = createWorkItemBody
+  .partial()
+  .pick({ title: true, body: true, status: true, priority: true, labels: true, roomId: true, metadata: true });
 const createRuleBody = OrchestrationRuleSchema.partial({
   id: true,
   enabled: true,
@@ -237,6 +240,54 @@ export function createApp(env: AppEnv = {}) {
       createdAt: timestamp
     });
     return c.json({ workItem: item, sessionStart: sessionStart.session ? sessionStart : undefined }, 201);
+  });
+  app.patch("/api/work-items/:id", async (c) => {
+    const current = store.getWorkItem(c.req.param("id"));
+    if (!current) {
+      return c.json({ error: "work item not found" }, 404);
+    }
+    const auth = await requireWriteAccess(
+      c.req.raw.headers,
+      "work_items:write",
+      current.codebaseId,
+      requireApiKey,
+      store,
+      bootstrapToken
+    );
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const body = await parseJson(c.req, patchWorkItemBody);
+    const room = body.roomId ? store.getRoom(body.roomId) : undefined;
+    if (body.roomId && !room) {
+      return c.json({ error: "room not found" }, 404);
+    }
+    if (room && room.codebaseId !== current.codebaseId) {
+      return c.json({ error: "room does not belong to work item codebase" }, 409);
+    }
+    const timestamp = now();
+    const workItem = store.saveWorkItem({
+      ...current,
+      title: body.title ?? current.title,
+      body: body.body ?? current.body,
+      status: body.status ?? current.status,
+      priority: body.priority ?? current.priority,
+      labels: body.labels ?? current.labels,
+      roomId: body.roomId ?? current.roomId,
+      metadata: body.metadata ?? current.metadata,
+      createdAt: current.createdAt,
+      updatedAt: timestamp
+    });
+    audit(store, {
+      actorType: auth.apiKey ? "api_key" : "system",
+      actorId: auth.apiKey?.id,
+      action: "work_item.update",
+      targetType: "work_item",
+      targetId: workItem.id,
+      metadata: { codebaseId: workItem.codebaseId, roomId: workItem.roomId },
+      createdAt: timestamp
+    });
+    return c.json({ workItem });
   });
   app.post("/api/work-items/:id/start", async (c) => {
     const item = store.getWorkItem(c.req.param("id"));

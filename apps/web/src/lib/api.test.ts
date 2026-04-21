@@ -140,6 +140,24 @@ describe("automomo web API client", () => {
             }
           });
         }
+        if (String(input).endsWith("/api/work-items/work_1")) {
+          return Response.json({
+            workItem: {
+              id: "work_1",
+              codebaseId: "codebase_1",
+              roomId: "room_1",
+              title: "Room work",
+              body: "",
+              source: "manual",
+              status: "running",
+              priority: "medium",
+              labels: [],
+              metadata: {},
+              createdAt: now,
+              updatedAt: now
+            }
+          });
+        }
         return Response.json({});
       }
     });
@@ -147,6 +165,7 @@ describe("automomo web API client", () => {
     await client.createAgent({ name: "Ralph" });
     await client.createRoom({ codebaseId: "codebase_1", name: "Shared room" });
     await client.createRoomWorkItem("room_1", { title: "Room work" });
+    await client.updateWorkItem("work_1", { status: "running" });
 
     expect(requests).toEqual([
       {
@@ -171,6 +190,14 @@ describe("automomo web API client", () => {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: "Room work" })
+        })
+      },
+      {
+        url: "http://automomo.test/api/work-items/work_1",
+        init: expect.objectContaining({
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "running" })
         })
       }
     ]);

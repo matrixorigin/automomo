@@ -1,4 +1,5 @@
 import {
+  type WorkItem,
   AgentSchema,
   CodebaseSchema,
   OrchestrationRuleSchema,
@@ -42,6 +43,18 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
   async function post(path: string, body: Record<string, unknown>) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      throw new Error(`automomo API ${path} failed with ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async function patch(path: string, body: Record<string, unknown>) {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
     });
@@ -131,6 +144,13 @@ export function createAutomomoApiClient(options: AutomomoApiClientOptions = {}) 
     },
     async createRoomWorkItem(roomId: string, body: Record<string, unknown>) {
       const payload = (await post(`/api/rooms/${roomId}/work-items`, body)) as { workItem: unknown };
+      return WorkItemSchema.parse(payload.workItem);
+    },
+    async updateWorkItem(
+      id: string,
+      body: Partial<Pick<WorkItem, "title" | "body" | "status" | "priority" | "labels" | "roomId" | "metadata">>
+    ) {
+      const payload = (await patch(`/api/work-items/${id}`, body as Record<string, unknown>)) as { workItem: unknown };
       return WorkItemSchema.parse(payload.workItem);
     }
   };
