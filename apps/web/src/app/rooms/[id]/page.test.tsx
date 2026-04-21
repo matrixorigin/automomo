@@ -1,6 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import RoomDetailPage from "./page";
 
 vi.mock("../../../lib/api", () => ({
   getApiClient: () => ({
@@ -123,7 +124,6 @@ vi.mock("../../../lib/api", () => ({
 
 describe("Room detail page", () => {
   it("renders a room workspace header and tabs with room chat stream controls", async () => {
-    const { default: RoomDetailPage } = await import("./page");
     const html = renderToStaticMarkup(await RoomDetailPage({ params: Promise.resolve({ id: "room_1" }) }));
 
     expect(html).toContain("Shared room");
