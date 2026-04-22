@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/prisma"
-import { runAgent, pollForCompletion } from "@/lib/oz-client"
 import { eventBroadcaster } from "@/lib/event-broadcaster"
 import { extractMentionedNames } from "@/lib/mentions"
-import { saveWarpArtifacts } from "@/lib/warp-artifacts"
+import { selectHarness } from "@/lib/harnesses"
 import { after } from "next/server"
 
 const MAX_DISPATCH_DEPTH = 20
@@ -97,10 +96,6 @@ export async function invokeAgent({
   }
   console.log("[invokeAgent] Found agent:", { name: agent.name, harness: agent.harness })
 
-  if (agent.harness !== "oz") {
-    return { success: false, error: `Harness "${agent.harness}" is not yet supported`, errorStatus: 400 }
-  }
-
   // Set agent to "running". For the initial call from /api/messages this is
   // already done before after() fires, but for recursive agent-to-agent
   // dispatches (depth > 0) this is the first time it's set.
@@ -121,6 +116,9 @@ export async function invokeAgent({
 
     // Fetch room details and recent chat history
     const room = await prisma.room.findUnique({ where: { id: roomId, workspaceId: effectiveWorkspaceId } })
+    if (!room) {
+      return { success: false, error: "Room not found", errorStatus: 404 }
+    }
 
     const roomAgents = await prisma.roomAgent.findMany({
       where: { roomId },
@@ -128,7 +126,7 @@ export async function invokeAgent({
     })
     const teammates = roomAgents
       .map((ra) => ra.agent)
-      .filter((a) => a.id !== agentId && a.harness === "oz")
+      .filter((a) => a.id !== agentId && (a.harness === "oz" || a.harness === "automomo-daemon"))
 
     const recentMessages = await prisma.message.findMany({
       where: { roomId },
@@ -219,34 +217,27 @@ To mention an agent, include @agent-name in your response message.
       : ""
     const fullPrompt = `${identityContext}\n${systemContext}\n\n${callbackInstructions}\n${taskInstructions}\n${notificationInstructions}\n${teammateInstructions}\n${roomContext}\nChat history:\n${chatHistory}\n\nUser request: ${prompt}`
 
-    console.log("[invokeAgent] Calling runAgent with invocationId:", invocationId)
+    console.log("[invokeAgent] Dispatching with harness:", agent.harness, "invocationId:", invocationId)
     console.log("[invokeAgent] Prompt length:", fullPrompt.length)
 
-    const environmentId = agent.environmentId || process.env.WARP_ENVIRONMENT_ID
-    if (!environmentId) {
-      throw new Error("This agent needs an environment to do its work in. Open the agent in the left panel and add an environment ID.")
-    }
-    console.log("[invokeAgent] Using environment:", environmentId)
+    const harness = selectHarness(agent)
+    const dispatch = await harness.dispatch({
+      invocationId,
+      room,
+      agent,
+      prompt: fullPrompt,
+      depth,
+      userId,
+      workspaceId: effectiveWorkspaceId,
+      callbackUrl,
+      chatHistory,
+      taskSummary,
+      teammateInstructions,
+      roomContext,
+    })
 
-    const taskId = await runAgent({ prompt: fullPrompt, environmentId, userId, workspaceId: effectiveWorkspaceId })
-    console.log("[invokeAgent] Got taskId:", taskId)
-    // Persist a mapping so the callback handler can recover the Warp run id
-    // and save artifacts even if this serverless function times out.
-    await prisma.agentCallback
-      .upsert({
-        where: { id: `warp-run:${invocationId}` },
-        create: { id: `warp-run:${invocationId}`, response: taskId },
-        update: { response: taskId },
-      })
-      .catch((err) => {
-        console.warn("[invokeAgent] Failed to persist warp-run mapping:", err)
-      })
-
-    const result = await pollForCompletion(taskId, { userId, workspaceId: effectiveWorkspaceId })
-
-    // Persist any artifacts returned by the Warp API
-    if (result.artifacts && result.artifacts.length > 0) {
-      await saveWarpArtifacts(result.artifacts, { roomId, agentId, userId })
+    if (dispatch.status === "queued") {
+      return { success: true }
     }
 
     // Update agent status back to idle
@@ -257,21 +248,21 @@ To mention an agent, include @agent-name in your response message.
 
     eventBroadcaster.broadcast({ type: "room", roomId, data: null })
 
-    if (result.state === "failed") {
+    if (dispatch.status === "failed") {
       const errorMessage = await prisma.message.upsert({
         where: { id: invocationId },
         create: {
           id: invocationId,
           content: `Error: Agent task failed`,
           authorType: "agent",
-          sessionUrl: result.sessionLink,
+          sessionUrl: dispatch.sessionUrl,
           userId,
           roomId,
           authorId: agentId,
         },
         // If a callback already persisted a response message, do not overwrite its content.
         update: {
-          ...(result.sessionLink ? { sessionUrl: result.sessionLink } : {}),
+          ...(dispatch.sessionUrl ? { sessionUrl: dispatch.sessionUrl } : {}),
         },
         include: {
           agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } },
@@ -291,8 +282,7 @@ To mention an agent, include @agent-name in your response message.
       }
     }
 
-    let messageContent =
-      result.statusMessage || (result.title ? `✓ ${result.title}` : "Task completed")
+    let messageContent = dispatch.immediateMessage || "Task completed"
     let hasCallbackResponse = false
 
     // Prefer the message that is persisted by /api/agent-response (so we survive serverless timeouts).
@@ -342,14 +332,14 @@ To mention an agent, include @agent-name in your response message.
         id: invocationId,
         content: messageContent,
         authorType: "agent",
-        sessionUrl: result.sessionLink,
+        sessionUrl: dispatch.sessionUrl,
         userId,
         roomId,
         authorId: agentId,
       },
       update: {
         ...(hasCallbackResponse ? { content: messageContent } : {}),
-        ...(result.sessionLink ? { sessionUrl: result.sessionLink } : {}),
+        ...(dispatch.sessionUrl ? { sessionUrl: dispatch.sessionUrl } : {}),
       },
       include: {
         agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } },
@@ -358,7 +348,7 @@ To mention an agent, include @agent-name in your response message.
     console.log("[invokeAgent] Created message:", {
       id: message.id,
       content: messageContent,
-      sessionUrl: result.sessionLink,
+      sessionUrl: dispatch.sessionUrl,
     })
 
     eventBroadcaster.broadcast({
@@ -490,4 +480,3 @@ To mention an agent, include @agent-name in your response message.
     throw error
   }
 }
-

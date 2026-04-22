@@ -530,6 +530,88 @@ export const LeaseFailureUploadSchema = z.object({
   metadata: MetadataSchema
 });
 
+export const AgentRunLeaseSchema = z.object({
+  leaseId: IdSchema,
+  run: z.object({
+    id: IdSchema,
+    roomId: IdSchema,
+    agentId: IdSchema,
+    runtimeId: IdSchema,
+    prompt: z.string().trim().min(1),
+    sourceMessageId: IdSchema.nullable(),
+    depth: z.number().int().nonnegative().default(0)
+  }),
+  room: z.object({
+    id: IdSchema,
+    name: z.string().trim().min(1),
+    description: z.string().default("")
+  }),
+  agent: z.object({
+    id: IdSchema,
+    name: z.string().trim().min(1),
+    systemPrompt: z.string().default(""),
+    skills: z.array(z.string().trim().min(1)).default([]),
+    mcpServers: z.array(z.unknown()).default([])
+  }),
+  runtime: z.object({
+    id: IdSchema,
+    name: z.string().trim().min(1),
+    provider: RuntimeProviderSchema,
+    workspaceRoot: z.string().nullable(),
+    environment: MetadataSchema
+  }),
+  context: z.array(
+    z.object({
+      id: IdSchema,
+      authorType: z.string().trim().min(1),
+      authorName: z.string().trim().min(1),
+      content: z.string(),
+      timestamp: ISODateString
+    })
+  ).default([]),
+  expiresAt: ISODateString
+});
+
+export const AgentRunLeaseResponseSchema = z.object({
+  lease: AgentRunLeaseSchema.nullable()
+});
+
+export const AgentRunEventUploadSchema = z.object({
+  runtimeId: IdSchema,
+  leaseId: IdSchema,
+  runId: IdSchema,
+  events: z.array(
+    z.object({
+      kind: z.string().trim().min(1).default("runtime"),
+      summary: z.string().trim().min(1),
+      detail: z.string().default(""),
+      metadata: MetadataSchema
+    })
+  ).min(1)
+});
+
+export const AgentRunOutcomeUploadSchema = z.object({
+  runtimeId: IdSchema,
+  leaseId: IdSchema,
+  runId: IdSchema,
+  content: z.string().trim().min(1),
+  outcome: z.object({
+    status: z.enum(["success", "failed", "needs_human"]),
+    summary: z.string().trim().min(1),
+    result: MetadataSchema
+  }),
+  sessionUrl: z.string().url().nullable().optional()
+});
+
+export const AgentRunFailureUploadSchema = z.object({
+  runtimeId: IdSchema,
+  leaseId: IdSchema,
+  runId: IdSchema,
+  reason: z.string().trim().min(1),
+  detail: z.string().default(""),
+  metadata: MetadataSchema
+});
+
 export const WorkItemUpsertRequestSchema = z.object({
   codebaseId: IdSchema,
   roomId: IdSchema.optional(),
@@ -662,6 +744,11 @@ export type LeaseEventUpload = z.infer<typeof LeaseEventUploadSchema>;
 export type LeaseOutcomeUpload = z.infer<typeof LeaseOutcomeUploadSchema>;
 export type LeaseRenewRequest = z.infer<typeof LeaseRenewRequestSchema>;
 export type LeaseFailureUpload = z.infer<typeof LeaseFailureUploadSchema>;
+export type AgentRunLease = z.infer<typeof AgentRunLeaseSchema>;
+export type AgentRunLeaseResponse = z.infer<typeof AgentRunLeaseResponseSchema>;
+export type AgentRunEventUpload = z.infer<typeof AgentRunEventUploadSchema>;
+export type AgentRunOutcomeUpload = z.infer<typeof AgentRunOutcomeUploadSchema>;
+export type AgentRunFailureUpload = z.infer<typeof AgentRunFailureUploadSchema>;
 export type WorkItemUpsertRequest = z.infer<typeof WorkItemUpsertRequestSchema>;
 export type WorkItemUpsertResult = z.infer<typeof WorkItemUpsertResultSchema>;
 export type RuntimeExecutionRequest = z.infer<typeof RuntimeExecutionRequestSchema>;

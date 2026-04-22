@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AgentRunEventUploadSchema,
+  AgentRunLeaseResponseSchema,
+  AgentRunOutcomeUploadSchema,
   ApiKeySchema,
   AuditEventSchema,
   CodebaseSchema,
@@ -86,6 +89,66 @@ describe("automomo protocol schemas", () => {
 
     expect(upload.outcome.eventsUploaded).toBe(0);
     expect(upload.outcome.result).toEqual({ patchReady: true });
+  });
+
+  it("models Oz AgentRun daemon leases and outcomes", () => {
+    const leaseResponse = AgentRunLeaseResponseSchema.parse({
+      lease: {
+        leaseId: "lease_1",
+        run: {
+          id: "run_1",
+          roomId: "room_1",
+          agentId: "agent_1",
+          runtimeId: "runtime_1",
+          prompt: "Build it",
+          sourceMessageId: "message_1",
+          depth: 0
+        },
+        room: { id: "room_1", name: "Room", description: "" },
+        agent: {
+          id: "agent_1",
+          name: "Builder",
+          systemPrompt: "Build carefully",
+          skills: ["typescript"],
+          mcpServers: []
+        },
+        runtime: {
+          id: "runtime_1",
+          name: "Local runtime",
+          provider: "pi",
+          workspaceRoot: "/repo",
+          environment: { workspaceRoot: "/repo" }
+        },
+        context: [
+          {
+            id: "message_1",
+            authorType: "human",
+            authorName: "User",
+            content: "Please build it",
+            timestamp: now
+          }
+        ],
+        expiresAt: now
+      }
+    });
+    const eventUpload = AgentRunEventUploadSchema.parse({
+      runtimeId: "runtime_1",
+      leaseId: "lease_1",
+      runId: "run_1",
+      events: [{ summary: "Started runtime" }]
+    });
+    const outcomeUpload = AgentRunOutcomeUploadSchema.parse({
+      runtimeId: "runtime_1",
+      leaseId: "lease_1",
+      runId: "run_1",
+      content: "Done",
+      outcome: { status: "success", summary: "Done", result: { ok: true } },
+      sessionUrl: null
+    });
+
+    expect(leaseResponse.lease?.run.id).toBe("run_1");
+    expect(eventUpload.events[0]?.kind).toBe("runtime");
+    expect(outcomeUpload.outcome.result).toEqual({ ok: true });
   });
 
   it("parses overview state for live web surfaces", () => {

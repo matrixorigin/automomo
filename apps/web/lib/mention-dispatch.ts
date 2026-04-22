@@ -9,6 +9,7 @@ type MentionableAgent = {
 
 export interface MentionDispatchTargets {
   mentionedAgents: MentionableAgent[]
+  /** Agents that can be invoked through the Oz-style room dispatch path. */
   ozAgents: MentionableAgent[]
   openClawAgents: MentionableAgent[]
 }
@@ -44,7 +45,7 @@ export async function getMentionDispatchTargets({
   const mentionedAgents = candidates.filter((agent) => mentionedSet.has(agent.name.toLowerCase()))
   return {
     mentionedAgents,
-    ozAgents: mentionedAgents.filter((agent) => agent.harness === "oz"),
+    ozAgents: mentionedAgents.filter((agent) => agent.harness === "oz" || agent.harness === "automomo-daemon"),
     openClawAgents: mentionedAgents.filter((agent) => agent.harness === "openclaw"),
   }
 }
@@ -91,4 +92,3 @@ export async function enqueueOpenClawMentions({
 
   return created
 }
-
