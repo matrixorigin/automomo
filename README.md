@@ -37,10 +37,19 @@ Run the local daemon against the web app from the workspace you want agents to u
 pnpm dev:daemon
 ```
 
-The default daemon environment id is `environment_local`. Override it when needed:
+`start` is long-running: it keeps polling for room agent work, renews active
+leases while a session is running, and sends busy/idle heartbeats back to the
+web app. The default daemon environment id is `environment_local`. Override it
+when needed:
 
 ```bash
 AUTOMOMO_ENVIRONMENT_ID=environment_local pnpm dev:daemon
+```
+
+For a one-shot smoke check, use:
+
+```bash
+pnpm dev:daemon:once
 ```
 
 Build and smoke-check the Docker Pi environment:
@@ -51,7 +60,15 @@ docker compose run --rm automomo-pi-env pi --help
 ```
 
 The Compose service installs `@mariozechner/pi-coding-agent`, exposes the `pi`
-CLI, and mounts this repository at `/workspace`.
+CLI, mounts this repository at `/workspace`, and can run the long-lived daemon
+inside Docker:
+
+```bash
+AUTOMOMO_ENVIRONMENT_ID=environment_docker docker compose up automomo-pi-env
+```
+
+Use `environment_docker` as the agent Environment ID in automomo. Inside Docker
+the daemon reaches the web app at `http://host.docker.internal:3003`.
 
 Validate the active workspace:
 

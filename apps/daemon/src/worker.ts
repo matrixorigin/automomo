@@ -6,14 +6,28 @@ export interface DaemonWorkerOptions {
   client: DaemonApiClient;
   registration: DaemonRegistration;
   runtimeAdapter?: PiRuntimeAdapter;
+  leaseRenewalIntervalMs?: number;
+  now?: () => Date;
+  onKeepaliveError?: (error: unknown) => void;
 }
+
+export type DaemonPollResult =
+  | { status: "idle" }
+  | { status: "completed"; leaseId: string; runId: string; outcomeId: string }
+  | { status: "failed"; leaseId: string; runId: string; reason: string };
+
+const DEFAULT_LEASE_RENEWAL_INTERVAL_MS = 30_000;
 
 export class DaemonWorker {
   private runtime: Runtime | undefined;
   private readonly runtimeAdapter: PiRuntimeAdapter;
+  private readonly leaseRenewalIntervalMs: number;
+  private readonly now: () => Date;
 
   constructor(private readonly options: DaemonWorkerOptions) {
     this.runtimeAdapter = options.runtimeAdapter ?? createPiRuntimeAdapter();
+    this.leaseRenewalIntervalMs = options.leaseRenewalIntervalMs ?? DEFAULT_LEASE_RENEWAL_INTERVAL_MS;
+    this.now = options.now ?? (() => new Date());
   }
 
   async register() {
@@ -21,70 +35,118 @@ export class DaemonWorker {
     return this.runtime;
   }
 
-  async pollOnce() {
+  async pollOnce(): Promise<DaemonPollResult> {
     const runtime = this.runtime ?? (await this.register());
+    await this.markRuntimeIdle(runtime);
+    const lease = await this.options.client.pollLease(runtime.id);
+    if (!lease) {
+      return { status: "idle" as const };
+    }
+
+    await this.keepLeaseAlive(runtime, lease);
+    const stopKeepalive = this.startLeaseKeepalive(runtime, lease);
+
+    try {
+      let result;
+      try {
+        result = await this.runtimeAdapter.runSession(agentRunLeaseToPiContext(lease));
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "runtime adapter failed";
+        await this.options.client.failLease({
+          runtimeId: runtime.id,
+          leaseId: lease.leaseId,
+          runId: lease.run.id,
+          reason,
+          detail: reason,
+          metadata: {}
+        });
+        return {
+          status: "failed" as const,
+          leaseId: lease.leaseId,
+          runId: lease.run.id,
+          reason
+        };
+      }
+
+      if (result.events.length > 0) {
+        await this.options.client.uploadEvents({
+          runtimeId: runtime.id,
+          leaseId: lease.leaseId,
+          runId: lease.run.id,
+          events: result.events.map(toAgentRunEvent)
+        });
+      }
+      await this.options.client.uploadOutcome({
+        runtimeId: runtime.id,
+        leaseId: lease.leaseId,
+        runId: lease.run.id,
+        content: result.outcome.summary,
+        outcome: {
+          status: result.outcome.status,
+          summary: result.outcome.summary,
+          result: result.outcome.result
+        },
+        artifacts: result.artifacts ?? [],
+        sessionUrl: null
+      });
+
+      return {
+        status: "completed" as const,
+        leaseId: lease.leaseId,
+        runId: lease.run.id,
+        outcomeId: result.outcome.id
+      };
+    } finally {
+      await stopKeepalive();
+      await this.markRuntimeIdle(runtime).catch(() => undefined);
+    }
+  }
+
+  private async keepLeaseAlive(runtime: Runtime, lease: AgentRunLease) {
+    await this.options.client.renewLease({ runtimeId: runtime.id, leaseId: lease.leaseId });
+    await this.options.client.heartbeat({
+      runtimeId: runtime.id,
+      status: "busy",
+      activeSessions: 1,
+      capacity: runtime.capacity,
+      observedAt: this.now().toISOString()
+    });
+  }
+
+  private startLeaseKeepalive(runtime: Runtime, lease: AgentRunLease) {
+    if (this.leaseRenewalIntervalMs <= 0) {
+      return async () => undefined;
+    }
+
+    const pending = new Set<Promise<void>>();
+    const keepAlive = () => {
+      const request = this.keepLeaseAlive(runtime, lease)
+        .catch((error) => {
+          this.options.onKeepaliveError?.(error);
+        })
+        .finally(() => {
+          pending.delete(request);
+        });
+      pending.add(request);
+    };
+    const timer = setInterval(() => {
+      keepAlive();
+    }, this.leaseRenewalIntervalMs);
+
+    return async () => {
+      clearInterval(timer);
+      await Promise.allSettled([...pending]);
+    };
+  }
+
+  private async markRuntimeIdle(runtime: Runtime) {
     await this.options.client.heartbeat({
       runtimeId: runtime.id,
       status: "online",
       activeSessions: 0,
       capacity: runtime.capacity,
-      observedAt: new Date().toISOString()
+      observedAt: this.now().toISOString()
     });
-    const lease = await this.options.client.pollLease(runtime.id);
-    if (!lease) {
-      return { status: "idle" as const };
-    }
-    await this.options.client.renewLease({ runtimeId: runtime.id, leaseId: lease.leaseId });
-
-    let result;
-    try {
-      result = await this.runtimeAdapter.runSession(agentRunLeaseToPiContext(lease));
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : "runtime adapter failed";
-      await this.options.client.failLease({
-        runtimeId: runtime.id,
-        leaseId: lease.leaseId,
-        runId: lease.run.id,
-        reason,
-        detail: reason,
-        metadata: {}
-      });
-      return {
-        status: "failed" as const,
-        leaseId: lease.leaseId,
-        runId: lease.run.id,
-        reason
-      };
-    }
-
-    if (result.events.length > 0) {
-      await this.options.client.uploadEvents({
-        runtimeId: runtime.id,
-        leaseId: lease.leaseId,
-        runId: lease.run.id,
-        events: result.events.map(toAgentRunEvent)
-      });
-    }
-    await this.options.client.uploadOutcome({
-      runtimeId: runtime.id,
-      leaseId: lease.leaseId,
-      runId: lease.run.id,
-      content: result.outcome.summary,
-      outcome: {
-        status: result.outcome.status,
-        summary: result.outcome.summary,
-        result: result.outcome.result
-      },
-      artifacts: result.artifacts ?? [],
-      sessionUrl: null
-    });
-
-    return {
-      status: "completed" as const,
-      leaseId: lease.leaseId,
-      runId: lease.run.id,
-      outcomeId: result.outcome.id
-    };
   }
 }
 

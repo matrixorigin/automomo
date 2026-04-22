@@ -5,14 +5,23 @@ services:
       dockerfile: docker/pi-agent/Dockerfile
     image: automomo/pi-agent:local
     working_dir: /workspace
-    command: ["sleep", "infinity"]
+    command: ["sh", "-lc", "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @automomo/daemon dev -- start"]
     environment:
+      AUTOMOMO_API_URL: ${AUTOMOMO_API_URL:-http://host.docker.internal:3003}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AUTOMOMO_ENVIRONMENT_ID: ${AUTOMOMO_ENVIRONMENT_ID:-environment_local}
+      AUTOMOMO_RUNTIME_NAME: ${AUTOMOMO_RUNTIME_NAME:-Docker Pi environment}
+      AUTOMOMO_DAEMON_IDLE_INTERVAL_MS: ${AUTOMOMO_DAEMON_IDLE_INTERVAL_MS:-2000}
+      AUTOMOMO_DAEMON_ERROR_INTERVAL_MS: ${AUTOMOMO_DAEMON_ERROR_INTERVAL_MS:-5000}
+      AUTOMOMO_DAEMON_LEASE_RENEWAL_INTERVAL_MS: ${AUTOMOMO_DAEMON_LEASE_RENEWAL_INTERVAL_MS:-30000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - .:/workspace
       - automomo-pi-home:/root
+      - automomo-pi-node-modules:/workspace/node_modules
 
 volumes:
   automomo-pi-home:
+  automomo-pi-node-modules:

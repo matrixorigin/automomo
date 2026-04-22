@@ -1,5 +1,7 @@
 FROM node:22-bookworm-slim
 
+RUN corepack enable
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     bash \

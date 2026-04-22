@@ -3,8 +3,35 @@ import { parseDaemonArgs } from "../src/config";
 import { runDoctor } from "../src/doctor";
 
 describe("daemon CLI operations", () => {
-  it("parses start, status, and doctor commands", () => {
-    expect(parseDaemonArgs(["daemon", "start", "--api-url", "http://localhost:8000"]).command).toBe("start");
+  it("parses start, once, status, and doctor commands", () => {
+    const start = parseDaemonArgs([
+      "daemon",
+      "start",
+      "--api-url",
+      "http://localhost:8000",
+      "--idle-interval-ms",
+      "100",
+      "--error-interval-ms",
+      "200",
+      "--lease-renewal-interval-ms",
+      "300",
+      "--max-iterations",
+      "4"
+    ]);
+
+    expect(start).toMatchObject({
+      command: "start",
+      apiUrl: "http://localhost:8000",
+      idleIntervalMs: 100,
+      errorIntervalMs: 200,
+      leaseRenewalIntervalMs: 300,
+      maxIterations: 4
+    });
+    expect(parseDaemonArgs(["--", "start", "--max-iterations", "1"])).toMatchObject({
+      command: "start",
+      maxIterations: 1
+    });
+    expect(parseDaemonArgs(["daemon", "once"]).command).toBe("once");
     expect(parseDaemonArgs(["daemon", "status"]).command).toBe("status");
     expect(parseDaemonArgs(["daemon", "doctor"]).command).toBe("doctor");
   });

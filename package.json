@@ -8,8 +8,10 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @automomo/web dev",
     "dev:local": "AUTH_SECRET=automomo-local-dev-secret pnpm --dir apps/web exec next dev --port 3003",
-    "dev:daemon": "pnpm --filter @automomo/daemon dev -- start --api-url http://localhost:3000",
+    "dev:daemon": "pnpm --filter @automomo/daemon dev -- start --api-url http://localhost:3003",
+    "dev:daemon:once": "pnpm --filter @automomo/daemon dev -- once --api-url http://localhost:3003",
     "docker:pi": "docker compose run --rm automomo-pi-env pi --help",
+    "docker:daemon": "docker compose up automomo-pi-env",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

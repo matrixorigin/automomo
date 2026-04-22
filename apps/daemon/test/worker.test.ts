@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPiRuntimeAdapter } from "@automomo/pi-runtime";
 import { DaemonWorker } from "../src/worker";
 
@@ -63,6 +63,10 @@ function agentRunLease() {
 }
 
 describe("DaemonWorker", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("registers a runtime, claims one lease, uploads events, and uploads only a structured outcome", async () => {
     const calls: { path: string; body: any }[] = [];
     const client = {
@@ -94,18 +98,20 @@ describe("DaemonWorker", () => {
     const result = await worker.pollOnce();
 
     expect(result).toMatchObject({ status: "completed", leaseId: "lease_1", runId: "run_1" });
-    expect(calls.map((call) => call.path)).toEqual(["heartbeat", "renew", "events", "outcome"]);
-    expect(calls[2]?.body).toMatchObject({ leaseId: "lease_1", runId: "run_1" });
-    expect(calls[2]?.body).not.toHaveProperty("sessionId");
-    expect(calls[3]?.body).toMatchObject({
+    expect(calls.map((call) => call.path)).toEqual(["heartbeat", "renew", "heartbeat", "events", "outcome", "heartbeat"]);
+    expect(calls[2]?.body).toMatchObject({ status: "busy", activeSessions: 1 });
+    expect(calls[3]?.body).toMatchObject({ leaseId: "lease_1", runId: "run_1" });
+    expect(calls[3]?.body).not.toHaveProperty("sessionId");
+    expect(calls[4]?.body).toMatchObject({
       leaseId: "lease_1",
       runId: "run_1",
       content: "Pi runtime adapter completed metadata-only session",
       sessionUrl: null
     });
-    expect(calls[3]?.body).not.toHaveProperty("sessionId");
-    expect(calls[3]?.body.outcome.result).toMatchObject({ runtimeId: "runtime_1" });
-    expect(JSON.stringify(calls[3]?.body)).not.toContain("apps/daemon/src/worker.ts");
+    expect(calls[4]?.body).not.toHaveProperty("sessionId");
+    expect(calls[4]?.body.outcome.result).toMatchObject({ runtimeId: "runtime_1" });
+    expect(calls[5]?.body).toMatchObject({ status: "online", activeSessions: 0 });
+    expect(JSON.stringify(calls[4]?.body)).not.toContain("apps/daemon/src/worker.ts");
   });
 
   it("stays idle when no lease is available", async () => {
@@ -156,5 +162,64 @@ describe("DaemonWorker", () => {
         body: expect.objectContaining({ leaseId: "lease_1", runId: "run_1", reason: "adapter exploded" })
       })
     ]);
+  });
+
+  it("renews the lease while a long runtime session is still running", async () => {
+    vi.useFakeTimers();
+    const calls: { path: string; body: any }[] = [];
+    let resolveRun: (() => void) | undefined;
+    const runStarted = new Promise<void>((resolveStarted) => {
+      resolveRun = resolveStarted;
+    });
+    const worker = new DaemonWorker({
+      client: {
+        register: async () => runtime,
+        pollLease: async () => agentRunLease(),
+        heartbeat: async (body: any) => {
+          calls.push({ path: "heartbeat", body });
+        },
+        renewLease: async (body: any) => {
+          calls.push({ path: "renew", body });
+        },
+        uploadEvents: async (body: any) => {
+          calls.push({ path: "events", body });
+        },
+        uploadOutcome: async (body: any) => {
+          calls.push({ path: "outcome", body });
+        },
+        failLease: async (body: any) => {
+          calls.push({ path: "fail", body });
+        }
+      } as any,
+      registration: { name: "Remote Pi runtime", provider: "pi", environment },
+      leaseRenewalIntervalMs: 10,
+      runtimeAdapter: {
+        runSession: async () => {
+          await runStarted;
+          return {
+            events: [],
+            outcome: {
+              id: "outcome_1",
+              sessionId: "run_1",
+              status: "success",
+              summary: "done",
+              result: {},
+              eventsUploaded: 0,
+              createdAt: now
+            }
+          };
+        }
+      } as any
+    });
+
+    const resultPromise = worker.pollOnce();
+    await vi.advanceTimersByTimeAsync(35);
+    resolveRun?.();
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({ status: "completed" });
+    expect(calls.filter((call) => call.path === "renew").length).toBeGreaterThanOrEqual(3);
+    expect(calls.filter((call) => call.path === "heartbeat" && call.body.status === "busy").length).toBeGreaterThanOrEqual(3);
+    expect(calls.at(-1)).toMatchObject({ path: "heartbeat", body: { status: "online", activeSessions: 0 } });
   });
 });
