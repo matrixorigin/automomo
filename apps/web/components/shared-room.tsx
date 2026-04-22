@@ -560,4 +560,3 @@ export function SharedRoom({ shareId }: { shareId: string }) {
     </Tabs>
   )
 }
-

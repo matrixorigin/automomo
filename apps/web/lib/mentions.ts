@@ -90,4 +90,3 @@ export function extractMentionedNames(text: string, candidateNames: string[]): s
 
   return result
 }
-

@@ -105,4 +105,3 @@ CREATE INDEX "WorkspaceInvite_workspaceId_idx" ON "WorkspaceInvite"("workspaceId
 
 -- CreateIndex
 CREATE INDEX "WorkspaceInvite_createdByUserId_idx" ON "WorkspaceInvite"("createdByUserId");
-

@@ -107,4 +107,3 @@ export function serializeAgentForClient<T extends SerializedAgentSource>(agent: 
     hasAgentToken: Boolean(agentTokenHash),
   }
 }
-

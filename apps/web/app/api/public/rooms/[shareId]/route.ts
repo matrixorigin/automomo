@@ -28,4 +28,3 @@ export async function GET(_req: Request, { params }: { params: Promise<{ shareId
     agents: room.agents.map((ra) => ra.agent),
   })
 }
-

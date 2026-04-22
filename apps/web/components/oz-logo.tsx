@@ -19,4 +19,3 @@ export function OzLogo({ className, ...props }: React.SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
-

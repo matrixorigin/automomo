@@ -7,4 +7,3 @@ export async function getSharedRoomByPublicShareId(publicShareId: string) {
     select: { id: true, name: true, description: true, createdAt: true },
   })
 }
-

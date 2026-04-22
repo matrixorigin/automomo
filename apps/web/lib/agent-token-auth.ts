@@ -34,4 +34,3 @@ export async function authenticateOpenClawAgent(
 
   return { agent: { id: agent.id, harness: agent.harness } }
 }
-

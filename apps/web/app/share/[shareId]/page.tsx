@@ -4,4 +4,3 @@ export default async function ShareRoomPage({ params }: { params: Promise<{ shar
   const { shareId } = await params
   return <SharedRoom shareId={shareId} />
 }
-

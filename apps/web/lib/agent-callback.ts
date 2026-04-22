@@ -34,4 +34,3 @@ export function tryDecodeAgentCallbackPayload(raw: string): AgentCallbackPayload
     return null
   }
 }
-
