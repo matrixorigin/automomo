@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { prisma } from "../lib/prisma"
 import { buildDaemonSignature } from "../lib/daemon-auth"
+import { eventBroadcaster } from "../lib/event-broadcaster"
 import { POST as registerDaemon } from "../app/api/daemon/register/route"
 import { POST as claimLease } from "../app/api/daemon/lease/route"
 import { POST as renewLease } from "../app/api/daemon/lease/renew/route"
@@ -199,27 +200,60 @@ describe("daemon lease routes", () => {
     await seedQueuedRun()
     const identity = await registerLocalDaemon()
     const leasePayload = await claimRun(identity)
+    const broadcastSpy = vi.spyOn(eventBroadcaster, "broadcast")
     const outcomeBody = {
       runtimeId: "runtime_1",
       leaseId: leasePayload.lease.leaseId,
       runId: "run_1",
       content: "Done",
       outcome: { status: "success", summary: "Done", result: {} },
+      artifacts: [
+        {
+          type: "patch",
+          title: "Current diff",
+          content: "diff --git a/file b/file",
+          metadata: { command: "git diff", filesChanged: ["file"] },
+        },
+        {
+          type: "review",
+          title: "Review notes",
+          content: "No blocking issues.",
+        },
+      ],
       sessionUrl: null,
     }
     const response = await uploadOutcome(
       jsonRequest("/api/daemon/outcome", outcomeBody, signedHeaders("/api/daemon/outcome", outcomeBody, identity))
     )
     expect(response.status).toBe(200)
-    const [message, run, lease] = await Promise.all([
+    const [message, run, lease, artifacts] = await Promise.all([
       prisma.message.findUnique({ where: { id: "run_1" } }),
       prisma.agentRun.findUnique({ where: { id: "run_1" } }),
       prisma.agentRunLease.findUnique({ where: { id: leasePayload.lease.leaseId } }),
+      prisma.artifact.findMany({ where: { roomId: "room_1" }, orderBy: { createdAt: "asc" } }),
     ])
     expect(message?.content).toBe("Done")
     expect(message?.authorId).toBe("agent_1")
     expect(run?.status).toBe("completed")
     expect(lease?.status).toBe("completed")
+    expect(artifacts).toHaveLength(2)
+    expect(artifacts[0]).toMatchObject({
+      type: "patch",
+      title: "Current diff",
+      runId: "run_1",
+      environmentId: "runtime_1",
+      createdBy: "agent_1",
+    })
+    expect(JSON.parse(artifacts[0]?.metadataJson ?? "{}")).toMatchObject({
+      command: "git diff",
+      filesChanged: ["file"],
+    })
+    expect(broadcastSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: "artifact",
+      roomId: "room_1",
+      data: expect.objectContaining({ type: "patch", title: "Current diff" }),
+    }))
+    broadcastSpy.mockRestore()
   }))
 
   it("rejects outcomes after lease expiration", withTestDatabase(async () => {

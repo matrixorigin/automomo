@@ -163,6 +163,13 @@ export async function invokeAgent({
 AUTOMOMO RUNTIME:
 Return one final response for this task. automomo will publish the runtime outcome back into the room.
 The room UI supports Markdown. If you want to trigger another agent, include their @mention in normal text (do NOT wrap it in backticks/code).
+Keep the final room message concise. Put reviewable work products in artifacts instead of dumping them into chat:
+- plan: proposed decomposition or execution plan
+- patch: changed files, diff summaries, or implementation notes for human review
+- review: review findings, signoff, risks, and follow-up notes
+- log: validation commands and results
+- pr: pull request links and release notes
+- document: longer generated docs or specs
 `
 
     const agentApiKey = process.env.AGENT_API_KEY || ""

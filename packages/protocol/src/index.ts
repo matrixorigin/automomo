@@ -109,6 +109,38 @@ export const RoomTaskSchema = z.object({
   updatedAt: ISODateString
 });
 
+export const ArtifactTypeSchema = z.enum(["plan", "patch", "review", "pr", "document", "log"]);
+
+export const ArtifactMetadataSchema = MetadataSchema;
+
+export const ArtifactCreateInputSchema = z.object({
+  type: ArtifactTypeSchema,
+  title: z.string().trim().min(1).max(200),
+  content: z.string().default(""),
+  url: z.string().url().nullable().optional(),
+  runId: IdSchema.nullable().optional(),
+  environmentId: IdSchema.nullable().optional(),
+  taskId: IdSchema.nullable().optional(),
+  metadata: ArtifactMetadataSchema
+});
+
+export const ArtifactSchema = z.object({
+  id: IdSchema,
+  roomId: IdSchema,
+  type: ArtifactTypeSchema,
+  title: z.string().trim().min(1),
+  content: z.string().default(""),
+  url: z.string().url().nullable().optional(),
+  createdBy: IdSchema.nullable().optional(),
+  userId: IdSchema.nullable().optional(),
+  runId: IdSchema.nullable().optional(),
+  environmentId: IdSchema.nullable().optional(),
+  taskId: IdSchema.nullable().optional(),
+  metadata: ArtifactMetadataSchema,
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
 export const WorkItemSourceSchema = z.enum(["manual", "api", "webhook", "schedule", "sync"]);
 export const WorkItemStatusSchema = z.enum([
   "open",
@@ -616,6 +648,18 @@ export const AgentRunEventUploadSchema = z.object({
   ).min(1)
 });
 
+export const OutcomeArtifactInputSchema = ArtifactCreateInputSchema.omit({
+  runId: true,
+  environmentId: true
+});
+
+export const RuntimeFinalOutputSchema = z.object({
+  status: z.enum(["success", "failed", "needs_human"]),
+  summary: z.string().trim().min(1),
+  result: MetadataSchema,
+  artifacts: z.array(OutcomeArtifactInputSchema).default([])
+});
+
 export const AgentRunOutcomeUploadSchema = z.object({
   runtimeId: IdSchema,
   leaseId: IdSchema,
@@ -626,7 +670,8 @@ export const AgentRunOutcomeUploadSchema = z.object({
     summary: z.string().trim().min(1),
     result: MetadataSchema
   }),
-  sessionUrl: z.string().url().nullable().optional()
+  sessionUrl: z.string().url().nullable().optional(),
+  artifacts: z.array(OutcomeArtifactInputSchema).default([])
 });
 
 export const AgentRunFailureUploadSchema = z.object({
@@ -733,6 +778,9 @@ export type RoomMessageAuthor = z.infer<typeof RoomMessageAuthorSchema>;
 export type RoomMessage = z.infer<typeof RoomMessageSchema>;
 export type RoomTaskStatus = z.infer<typeof RoomTaskStatusSchema>;
 export type RoomTask = z.infer<typeof RoomTaskSchema>;
+export type ArtifactType = z.infer<typeof ArtifactTypeSchema>;
+export type Artifact = z.infer<typeof ArtifactSchema>;
+export type ArtifactCreateInput = z.infer<typeof ArtifactCreateInputSchema>;
 export type WorkItem = z.infer<typeof WorkItemSchema>;
 export type OrchestrationRule = z.infer<typeof OrchestrationRuleSchema>;
 export type OrchestrationTrigger = z.infer<typeof OrchestrationTriggerSchema>;
@@ -776,6 +824,8 @@ export type LeaseFailureUpload = z.infer<typeof LeaseFailureUploadSchema>;
 export type AgentRunLease = z.infer<typeof AgentRunLeaseSchema>;
 export type AgentRunLeaseResponse = z.infer<typeof AgentRunLeaseResponseSchema>;
 export type AgentRunEventUpload = z.infer<typeof AgentRunEventUploadSchema>;
+export type OutcomeArtifactInput = z.infer<typeof OutcomeArtifactInputSchema>;
+export type RuntimeFinalOutput = z.infer<typeof RuntimeFinalOutputSchema>;
 export type AgentRunOutcomeUpload = z.infer<typeof AgentRunOutcomeUploadSchema>;
 export type AgentRunFailureUpload = z.infer<typeof AgentRunFailureUploadSchema>;
 export type WorkItemUpsertRequest = z.infer<typeof WorkItemUpsertRequestSchema>;

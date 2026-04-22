@@ -75,6 +75,7 @@ export class DaemonWorker {
         summary: result.outcome.summary,
         result: result.outcome.result
       },
+      artifacts: result.artifacts ?? [],
       sessionUrl: null
     });
 

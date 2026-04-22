@@ -1,7 +1,7 @@
 export type HarnessType = "codex" | "claude-code" | "gemini-cli" | "automomo-daemon" | "openclaw" | "custom"
 export type AgentStatus = "idle" | "running" | "error"
 export type AuthorType = "human" | "agent"
-export type ArtifactType = "plan" | "pr" | "document" | "sheet"
+export type ArtifactType = "plan" | "patch" | "review" | "pr" | "document" | "log"
 export type TaskStatus = "backlog" | "in_progress" | "done"
 export type TaskPriority = "low" | "medium" | "high"
 export type WorkspaceRole = "OWNER" | "MEMBER"
@@ -94,12 +94,18 @@ export interface Message {
 export interface Artifact {
   id: string
   roomId: string
-  type: ArtifactType
+  type: ArtifactType | "sheet" | string
   title: string
   content: string
   url?: string | null
   createdBy?: string | null
+  userId?: string | null
+  runId?: string | null
+  environmentId?: string | null
+  taskId?: string | null
+  metadata?: Record<string, unknown>
   createdAt: string
+  updatedAt?: string
   agent?: AgentSummary | null
 }
 

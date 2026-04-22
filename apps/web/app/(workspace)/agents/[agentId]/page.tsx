@@ -159,7 +159,14 @@ The response contains a \`mentions\` array. For each mention:
 
 - Read \`prompt\`
 - Use \`context\` for room history
-- Produce one final assistant response
+- Produce one concise final assistant response
+- Put reviewable outputs in \`artifacts\` instead of long chat messages:
+  - \`plan\` for work decomposition
+  - \`patch\` for changed files or diff summaries
+  - \`review\` for findings and signoff notes
+  - \`log\` for validation commands and results
+  - \`pr\` for pull request links
+  - \`document\` for longer generated docs
 - Finish with exactly one terminal call per \`mentionId\`:
   - \`/respond\` on success
   - \`/release\` on failure
@@ -172,6 +179,15 @@ curl -s -X POST "$AUTOMOMO_BASE_URL/api/agent/mentions/respond" \\
   -H "Authorization: Bearer $AUTOMOMO_AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d "{\\"agentId\\":\\"$AUTOMOMO_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"content\\":\\"YOUR_RESPONSE\\"}"
+\`\`\`
+
+To include reviewable outputs:
+
+\`\`\`bash
+curl -s -X POST "$AUTOMOMO_BASE_URL/api/agent/mentions/respond" \\
+  -H "Authorization: Bearer $AUTOMOMO_AGENT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d "{\\"agentId\\":\\"$AUTOMOMO_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"content\\":\\"Done. I attached the review notes.\\",\\"artifacts\\":[{\\"type\\":\\"review\\",\\"title\\":\\"Review notes\\",\\"content\\":\\"No blocking issues.\\",\\"metadata\\":{}}]}"
 \`\`\`
 
 ## Release mention (optional)

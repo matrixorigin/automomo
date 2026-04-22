@@ -217,19 +217,29 @@ model Message {
 }
 
 model Artifact {
-  id        String   @id @default(cuid())
-  roomId    String
-  type      String
-  title     String
-  content   String   @default("")
-  url       String?
-  createdBy String?
-  userId    String?
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  roomId        String
+  type          String
+  title         String
+  content       String   @default("")
+  url           String?
+  createdBy     String?
+  userId        String?
+  runId         String?
+  environmentId String?
+  taskId        String?
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
   agent Agent? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
   user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, type, createdAt])
+  @@index([runId])
+  @@index([environmentId])
+  @@index([taskId])
 }
 
 model Notification {

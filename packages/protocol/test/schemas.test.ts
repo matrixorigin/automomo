@@ -3,6 +3,9 @@ import {
   AgentRunEventUploadSchema,
   AgentRunLeaseResponseSchema,
   AgentRunOutcomeUploadSchema,
+  ArtifactCreateInputSchema,
+  ArtifactSchema,
+  RuntimeFinalOutputSchema,
   ApiKeySchema,
   AuditEventSchema,
   CodebaseSchema,
@@ -56,6 +59,71 @@ describe("automomo protocol schemas", () => {
     expect(environment.kind).toBe("local");
     expect(environment.command).toBe("pi");
     expect(environment.status).toBe("offline");
+  });
+
+  it("models room artifacts and daemon outcome artifact uploads", () => {
+    const artifact = ArtifactSchema.parse({
+      id: "artifact_1",
+      roomId: "room_1",
+      type: "patch",
+      title: "Current working diff",
+      content: "diff --git a/file b/file",
+      createdBy: "agent_1",
+      userId: null,
+      runId: "run_1",
+      environmentId: "environment_local",
+      taskId: "task_1",
+      metadata: { filesChanged: ["file"] },
+      createdAt: now,
+      updatedAt: now
+    });
+    const createInput = ArtifactCreateInputSchema.parse({
+      type: "review",
+      title: "Review notes",
+      taskId: null
+    });
+
+    expect(artifact.type).toBe("patch");
+    expect(artifact.metadata.filesChanged).toEqual(["file"]);
+    expect(createInput.metadata).toEqual({});
+    expect(createInput.taskId).toBeNull();
+    expect(() =>
+      ArtifactCreateInputSchema.parse({
+        type: "sheet",
+        title: "Old sheet"
+      })
+    ).toThrow();
+  });
+
+  it("models runtime final output artifacts as optional review surfaces", () => {
+    const withoutArtifacts = RuntimeFinalOutputSchema.parse({
+      status: "success",
+      summary: "Done",
+      result: { ok: true }
+    });
+    const withArtifacts = RuntimeFinalOutputSchema.parse({
+      status: "success",
+      summary: "Done",
+      result: {},
+      artifacts: [
+        {
+          type: "review",
+          title: "Review notes",
+          content: "No blocking issues."
+        }
+      ]
+    });
+
+    expect(withoutArtifacts.artifacts).toEqual([]);
+    expect(withArtifacts.artifacts[0]?.type).toBe("review");
+    expect(() =>
+      RuntimeFinalOutputSchema.parse({
+        status: "success",
+        summary: "Done",
+        result: {},
+        artifacts: [{ type: "sheet", title: "Legacy sheet" }]
+      })
+    ).toThrow();
   });
 
   it("rejects empty identifiers before they reach API state", () => {
@@ -159,12 +227,21 @@ describe("automomo protocol schemas", () => {
       runId: "run_1",
       content: "Done",
       outcome: { status: "success", summary: "Done", result: { ok: true } },
-      sessionUrl: null
+      sessionUrl: null,
+      artifacts: [
+        {
+          type: "patch",
+          title: "Current diff",
+          content: "diff --git a/file b/file",
+          metadata: { command: "git diff" }
+        }
+      ]
     });
 
     expect(leaseResponse.lease?.run.id).toBe("run_1");
     expect(eventUpload.events[0]?.kind).toBe("runtime");
     expect(outcomeUpload.outcome.result).toEqual({ ok: true });
+    expect(outcomeUpload.artifacts[0]?.type).toBe("patch");
   });
 
   it("parses overview state for live web surfaces", () => {
