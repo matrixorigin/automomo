@@ -2,12 +2,12 @@
   "name": "automomo",
   "version": "0.1.0",
   "private": true,
-  "description": "Multi-agent human/AI orchestration for codebase runtimes.",
+  "description": "Oz-first room workspace with a local daemon runtime.",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @automomo/api dev",
-    "dev:web": "pnpm --filter @automomo/web dev",
+    "dev": "pnpm --filter @automomo/web dev",
+    "dev:daemon": "pnpm --filter @automomo/daemon dev -- start --api-url http://localhost:3000",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

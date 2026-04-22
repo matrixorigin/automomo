@@ -1,49 +1,42 @@
 # automomo
 
-`automomo` is a room-first human/AI workspace for codebase runtimes.
-Humans and AI agents co-work inside shared rooms through runtime execution,
-session timelines, explicit human handoffs, and structured outcomes.
+`automomo` is an Oz-first room workspace where humans and AI agents work together in shared rooms. Rooms hold chat, tasks, artifacts, realtime updates, agent membership, and local runtime activity in one place.
 
-GitHub can be a source of work items, but the core product is not a GitHub issue
-or pull request review queue. The main nouns are codebases, work items,
-orchestration rules, sessions, agents, runtimes, handoffs, and outcomes.
+The local daemon provides runtime execution. It registers a runtime with the web app, polls for agent-run leases, runs the Pi runtime adapter against a local workspace, and posts events plus structured outcomes back to the room. Source code is not uploaded by default; your local machine can be the runtime.
 
 ## Workspace
 
-- `apps/web` - Next.js Programa-aligned operator UI.
-- `apps/api` - TypeScript control plane for API routes, daemon leases, events,
-  and outcomes.
-- `apps/daemon` - user-run TypeScript daemon for remote runtimes.
-- `packages/protocol` - shared Zod schemas and TypeScript types.
-- `packages/pi-runtime` - Pi Mono-oriented runtime adapter boundary.
-- `docs/prototypes/programa-static` - original static visual prototype.
+- `apps/web` - Oz-derived Next.js room workspace, Prisma database, room APIs, realtime events, and daemon routes.
+- `apps/daemon` - user-run local daemon for registering runtimes, claiming leases, running Pi, and reporting outcomes.
+- `packages/protocol` - shared Zod schemas and TypeScript types for daemon/runtime payloads.
+- `packages/pi-runtime` - Pi Mono runtime adapter boundary.
+- `docs/plans` - durable implementation and investigation plans.
+
+`apps/api` remains in the tree as retired legacy source, but it is no longer part of the active pnpm workspace.
 
 ## Commands
 
+Install dependencies:
+
 ```bash
 pnpm install
-pnpm test
-pnpm typecheck
-pnpm dev:web
+```
+
+Run the Oz-derived web app:
+
+```bash
 pnpm dev
 ```
 
-## Current Implementation Slice
+Run the local daemon against the web app from the workspace you want agents to use:
 
-The initial implementation includes:
+```bash
+pnpm dev:daemon
+```
 
-- Shared protocol schemas for all core product nouns and daemon lease payloads.
-- API routes for codebases, work items, orchestration rules, sessions, agents,
-  runtimes, human handoffs, daemon registration, heartbeats, leases, event
-  uploads, and outcome uploads.
-- Drizzle SQLite table definitions matching the product nouns.
-- A polling daemon loop that claims a lease, runs the Pi runtime adapter, uploads
-  session events, and sends a structured outcome.
-- A Next.js UI shell using the Programa-inspired light rail, compact toolbar,
-  dense rows, restrained controls, and yellow runtime/handoff accents.
+Validate the active workspace:
 
-## Design
-
-The visual direction comes from `docs/programa-alignment-spec.md`: white canvas,
-thin separators, compact left rail, black primary actions, acid-yellow runtime
-and handoff accents, and dense schedule-like rows.
+```bash
+pnpm test
+pnpm typecheck
+```
