@@ -15,7 +15,7 @@ import {
   CheckIcon,
 } from "@phosphor-icons/react"
 import { AgentIcon } from "@/components/agent-icon"
-import { OzLogo } from "@/components/oz-logo"
+import { AutomomoLogo } from "@/components/automomo-logo"
 
 import {
   Sidebar,
@@ -73,6 +73,16 @@ export function AppSidebar() {
   const [creatingWs, setCreatingWs] = React.useState(false)
   const [createWsError, setCreateWsError] = React.useState("")
   const [switchingWsId, setSwitchingWsId] = React.useState<string | null>(null)
+  const roomList = Array.isArray(rooms) ? rooms : []
+  const agentList = Array.isArray(agents)
+    ? agents.filter(
+        (agent, index, list) =>
+          typeof agent.id === "string" &&
+          agent.id.length > 0 &&
+          list.findIndex((candidate) => candidate.id === agent.id) === index
+      )
+    : []
+  const workspaceList = Array.isArray(workspaces) ? workspaces : []
 
   React.useEffect(() => {
     fetchWorkspace()
@@ -128,9 +138,9 @@ export function AppSidebar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-sidebar-accent focus-visible:outline-none">
-                <OzLogo />
+                <AutomomoLogo />
                 <span className="flex-1 truncate text-sm font-semibold tracking-tight">
-                  {workspace?.name ?? "Oz Workspace"}
+                  {workspace?.name ?? "automomo"}
                 </span>
                 {switchingWsId ? (
                   <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
@@ -140,7 +150,7 @@ export function AppSidebar() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {workspaces.map((ws) => (
+              {workspaceList.map((ws) => (
                 <DropdownMenuItem
                   key={ws.id}
                   onClick={() => handleSwitchWorkspace(ws.id)}
@@ -153,7 +163,7 @@ export function AppSidebar() {
                   )}
                 </DropdownMenuItem>
               ))}
-              {workspaces.length > 0 && <DropdownMenuSeparator />}
+              {workspaceList.length > 0 && <DropdownMenuSeparator />}
               <DropdownMenuItem onClick={() => setCreateWsDialogOpen(true)}>
                 <PlusIcon className="mr-2 h-3.5 w-3.5" />
                 Create workspace
@@ -206,7 +216,7 @@ export function AppSidebar() {
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
-                {rooms.map((room) => (
+                {roomList.map((room) => (
                   <SidebarMenuItem key={room.id}>
                     <SidebarMenuButton
                       asChild
@@ -232,7 +242,7 @@ export function AppSidebar() {
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
-                {agents.map((agent) => (
+                {agentList.map((agent) => (
                   <SidebarMenuItem key={agent.id}>
                     <SidebarMenuButton
                       asChild

@@ -1,9 +1,8 @@
-import { NextResponse, after } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { authenticateOpenClawAgent } from "@/lib/agent-token-auth"
 import { eventBroadcaster } from "@/lib/event-broadcaster"
 import { getMentionDispatchTargets, enqueueOpenClawMentions } from "@/lib/mention-dispatch"
-import { invokeAgent } from "@/lib/invoke-agent"
 class MentionCompletionRaceError extends Error {
   constructor() {
     super("Mention completion raced with another request")
@@ -160,30 +159,6 @@ export async function POST(request: Request) {
         })
       }
 
-      if (targets.ozAgents.length > 0) {
-        await prisma.agent.updateMany({
-          where: { id: { in: targets.ozAgents.map((agent) => agent.id) } },
-          data: { status: "running", activeRoomId: mention.roomId },
-        })
-        eventBroadcaster.broadcast({ type: "room", roomId: mention.roomId, data: null })
-
-        after(async () => {
-          await Promise.allSettled(
-            targets.ozAgents.map((targetAgent) =>
-              invokeAgent({
-                roomId: mention.roomId,
-                agentId: targetAgent.id,
-                prompt: content,
-                depth: 0,
-                userId: mention.room.userId,
-                workspaceId: mention.room.workspaceId ?? undefined,
-              }).catch((err) => {
-                console.error(`[agent/mentions/respond] Failed to invoke ${targetAgent.name}:`, err)
-              })
-            )
-          )
-        })
-      }
     }
 
     return NextResponse.json({

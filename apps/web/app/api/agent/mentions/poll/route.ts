@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       where: { id: agentId },
       select: { id: true, openclawConfig: true },
     })
-    if (!agent) return NextResponse.json({ error: "OpenClaw agent not found" }, { status: 404 })
+    if (!agent) return NextResponse.json({ error: "External agent not found" }, { status: 404 })
 
     const config = parseOpenClawConfig(agent.openclawConfig)
     const limit = clamp(body.limit, config.maxMentionsPerPoll, 1, 20)

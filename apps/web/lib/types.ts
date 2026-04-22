@@ -1,4 +1,4 @@
-export type HarnessType = "codex" | "claude-code" | "gemini-cli" | "oz" | "automomo-daemon" | "openclaw" | "custom"
+export type HarnessType = "codex" | "claude-code" | "gemini-cli" | "automomo-daemon" | "openclaw" | "custom"
 export type AgentStatus = "idle" | "running" | "error"
 export type AuthorType = "human" | "agent"
 export type ArtifactType = "plan" | "pr" | "document" | "sheet"

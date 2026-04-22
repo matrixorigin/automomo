@@ -64,7 +64,7 @@ describe("PiRuntimeAdapter", () => {
     expect(result.outcome.result).toMatchObject({ runtimeId: "runtime_1", agentId: "agent_1" });
   });
 
-  it("composes a room workspace prompt from Oz run metadata", () => {
+  it("composes a room workspace prompt from automomo run metadata", () => {
     const prompt = composePiPrompt({
       session: {
         id: "run_1",

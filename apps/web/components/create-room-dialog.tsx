@@ -81,7 +81,7 @@ export function CreateRoomDialog({
                 id="room-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Build a to do list app and a marketing page for it"
+                placeholder="Ship the next codebase milestone"
               />
             </Field>
             {agents.length > 0 && (

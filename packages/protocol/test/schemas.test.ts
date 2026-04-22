@@ -91,7 +91,7 @@ describe("automomo protocol schemas", () => {
     expect(upload.outcome.result).toEqual({ patchReady: true });
   });
 
-  it("models Oz AgentRun daemon leases and outcomes", () => {
+  it("models automomo AgentRun daemon leases and outcomes", () => {
     const leaseResponse = AgentRunLeaseResponseSchema.parse({
       lease: {
         leaseId: "lease_1",

@@ -156,7 +156,7 @@ async function seedRoomRun() {
 }
 
 describe("local machine runtime end-to-end", () => {
-  it("claims an Oz AgentRun through web daemon routes and persists the Pi outcome as a room message", withWebTestDatabase(async () => {
+  it("claims an automomo AgentRun through web daemon routes and persists the Pi outcome as a room message", withWebTestDatabase(async () => {
     await seedRoomRun();
 
     const uploadedBodies: Array<{ path: string; bodyText: string }> = [];

@@ -1,6 +1,6 @@
 import type { Agent, Room } from "@/lib/generated/prisma/client"
 
-export type AgentHarnessName = "oz" | "automomo-daemon"
+export type AgentHarnessName = "automomo-daemon"
 
 export interface AgentRunContext {
   invocationId: string

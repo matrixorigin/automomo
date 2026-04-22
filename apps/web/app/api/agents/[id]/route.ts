@@ -36,13 +36,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.color !== undefined) data.color = body.color
     if (body.icon !== undefined) data.icon = body.icon
     if (body.repoUrl !== undefined) data.repoUrl = body.repoUrl
-    if (body.harness !== undefined) data.harness = body.harness
-    if (body.environmentId !== undefined) data.environmentId = body.environmentId
+    if (body.harness !== undefined) {
+      if (body.harness !== "automomo-daemon" && body.harness !== "openclaw") {
+        return NextResponse.json({ error: "Unsupported agent harness" }, { status: 400 })
+      }
+      data.harness = body.harness
+    }
+    if (body.environmentId !== undefined) data.environmentId = ""
     if (body.runtimeId !== undefined) {
-      data.runtimeId =
+      const runtimeId =
         typeof body.runtimeId === "string" && body.runtimeId.trim().length > 0
           ? body.runtimeId.trim()
           : null
+      if (runtimeId) {
+        await prisma.runtime.upsert({
+          where: { id: runtimeId },
+          update: {},
+          create: {
+            id: runtimeId,
+            name: runtimeId === "runtime_local" ? "Local machine" : runtimeId,
+            provider: "pi",
+            mode: "remote_daemon",
+            workspaceRoot: process.cwd(),
+            status: "offline",
+          },
+        })
+      }
+      data.runtimeId = runtimeId
     }
     if (body.systemPrompt !== undefined) data.systemPrompt = body.systemPrompt
     if (body.openclawConfig !== undefined) data.openclawConfig = stringifyOpenClawConfig(body.openclawConfig)

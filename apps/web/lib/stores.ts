@@ -12,6 +12,26 @@ import type {
   WorkspaceInvite,
 } from "@/lib/types"
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value : []
+}
+
+function uniqueByStringId<T extends { id?: unknown }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  const unique: T[] = []
+  for (const item of items) {
+    if (typeof item.id !== "string" || item.id.length === 0) continue
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    unique.push(item)
+  }
+  return unique
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  return response.json().catch(() => null)
+}
+
 // ─── Room Store ────────────────────────────────────────────
 
 interface RoomStore {
@@ -32,7 +52,11 @@ export const useRoomStore = create<RoomStore>((set) => ({
   setActiveRoom: (id) => set({ activeRoomId: id }),
   fetchRooms: async () => {
     const res = await fetch("/api/rooms")
-    const rooms = await res.json()
+    if (!res.ok) {
+      set({ rooms: [] })
+      return
+    }
+    const rooms = uniqueByStringId(asArray<Room>(await readJson(res)))
     set({ rooms })
   },
   refreshRoom: async (roomId) => {
@@ -113,8 +137,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
   fetchWorkspaces: async () => {
     const res = await fetch("/api/workspaces")
-    if (!res.ok) return
-    const workspaces = await res.json()
+    if (!res.ok) {
+      set({ workspaces: [] })
+      return
+    }
+    const workspaces = uniqueByStringId(asArray<Workspace>(await readJson(res)))
     set({ workspaces })
   },
   switchWorkspace: async (workspaceId) => {
@@ -151,14 +178,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
   fetchMembers: async () => {
     const res = await fetch("/api/workspace/members")
-    if (!res.ok) return
-    const members = await res.json()
+    if (!res.ok) {
+      set({ members: [] })
+      return
+    }
+    const members = asArray<WorkspaceMember>(await readJson(res))
     set({ members })
   },
   fetchInvites: async () => {
     const res = await fetch("/api/workspace/invites")
-    if (!res.ok) return
-    const invites = await res.json()
+    if (!res.ok) {
+      set({ invites: [] })
+      return
+    }
+    const invites = asArray<WorkspaceInvite>(await readJson(res))
     set({ invites })
   },
   createInvite: async (expiresInDays) => {
@@ -211,7 +244,11 @@ export const useAgentStore = create<AgentStore>((set) => ({
   agents: [],
   fetchAgents: async () => {
     const res = await fetch("/api/agents")
-    const agents = await res.json()
+    if (!res.ok) {
+      set({ agents: [] })
+      return
+    }
+    const agents = uniqueByStringId(asArray<Agent>(await readJson(res)))
     set({ agents })
   },
   createAgent: async (data) => {
@@ -220,7 +257,14 @@ export const useAgentStore = create<AgentStore>((set) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Failed to create agent" }))
+      throw new Error(err.error ?? "Failed to create agent")
+    }
     const agent = await res.json()
+    if (typeof agent?.id !== "string") {
+      throw new Error("Agent response is missing an id")
+    }
     set((s) => ({
       agents: s.agents.some((a) => a.id === agent.id) ? s.agents : [...s.agents, agent],
     }))
@@ -232,7 +276,14 @@ export const useAgentStore = create<AgentStore>((set) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Failed to update agent" }))
+      throw new Error(err.error ?? "Failed to update agent")
+    }
     const agent = await res.json()
+    if (typeof agent?.id !== "string") {
+      throw new Error("Agent response is missing an id")
+    }
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? agent : a)) }))
     return agent
   },
@@ -260,10 +311,24 @@ export const useMessageStore = create<MessageStore>()(immer((set, get) => ({
   cursorByRoom: {},
   fetchMessages: async (roomId) => {
     const res = await fetch(`/api/messages?roomId=${roomId}&limit=50`)
-    const data = await res.json()
-    const messages: Message[] = Array.isArray(data) ? data : data.messages
-    const hasMore: boolean = Array.isArray(data) ? false : (data.hasMore ?? false)
-    const nextCursor: string | null = Array.isArray(data) ? null : (data.nextCursor ?? null)
+    if (!res.ok) {
+      set((s) => {
+        s.messagesByRoom[roomId] = []
+        s.hasMoreByRoom[roomId] = false
+        s.cursorByRoom[roomId] = null
+      })
+      return
+    }
+    const data = await readJson(res)
+    const messages: Message[] = Array.isArray(data)
+      ? data
+      : asArray<Message>((data as { messages?: unknown } | null)?.messages)
+    const hasMore: boolean = Array.isArray(data) ? false : Boolean((data as { hasMore?: unknown } | null)?.hasMore)
+    const nextCursor: string | null = Array.isArray(data)
+      ? null
+      : typeof (data as { nextCursor?: unknown } | null)?.nextCursor === "string"
+        ? (data as { nextCursor: string }).nextCursor
+        : null
     set((s) => {
       s.messagesByRoom[roomId] = messages
       s.hasMoreByRoom[roomId] = hasMore
@@ -274,10 +339,17 @@ export const useMessageStore = create<MessageStore>()(immer((set, get) => ({
     const cursor = get().cursorByRoom[roomId]
     if (!cursor) return
     const res = await fetch(`/api/messages?roomId=${roomId}&limit=50&cursor=${cursor}`)
-    const data = await res.json()
-    const olderMessages: Message[] = Array.isArray(data) ? data : data.messages
-    const hasMore: boolean = Array.isArray(data) ? false : (data.hasMore ?? false)
-    const nextCursor: string | null = Array.isArray(data) ? null : (data.nextCursor ?? null)
+    if (!res.ok) return
+    const data = await readJson(res)
+    const olderMessages: Message[] = Array.isArray(data)
+      ? data
+      : asArray<Message>((data as { messages?: unknown } | null)?.messages)
+    const hasMore: boolean = Array.isArray(data) ? false : Boolean((data as { hasMore?: unknown } | null)?.hasMore)
+    const nextCursor: string | null = Array.isArray(data)
+      ? null
+      : typeof (data as { nextCursor?: unknown } | null)?.nextCursor === "string"
+        ? (data as { nextCursor: string }).nextCursor
+        : null
     set((s) => {
       const existing = s.messagesByRoom[roomId] || []
       const existingIds = new Set(existing.map((m) => m.id))
@@ -333,7 +405,11 @@ export const useArtifactStore = create<ArtifactStore>((set) => ({
   artifactsByRoom: {},
   fetchArtifacts: async (roomId) => {
     const res = await fetch(`/api/artifacts?roomId=${roomId}`)
-    const artifacts = await res.json()
+    if (!res.ok) {
+      set((s) => ({ artifactsByRoom: { ...s.artifactsByRoom, [roomId]: [] } }))
+      return
+    }
+    const artifacts = asArray<Artifact>(await readJson(res))
     set((s) => ({ artifactsByRoom: { ...s.artifactsByRoom, [roomId]: artifacts } }))
   },
   createArtifact: async (data) => {
@@ -433,7 +509,11 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   unreadCount: 0,
   fetchNotifications: async () => {
     const res = await fetch("/api/notifications")
-    const notifications = await res.json()
+    if (!res.ok) {
+      set({ notifications: [], unreadCount: 0 })
+      return
+    }
+    const notifications = asArray<Notification>(await readJson(res))
     set({
       notifications,
       unreadCount: notifications.filter((n: Notification) => !n.read).length,
@@ -482,8 +562,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   settings: {},
   fetchSettings: async () => {
     const res = await fetch("/api/settings")
-    const settings = await res.json()
-    set({ settings })
+    if (!res.ok) {
+      set({ settings: {} })
+      return
+    }
+    const settings = await readJson(res)
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+      set({ settings: {} })
+      return
+    }
+    set({ settings: settings as Record<string, string> })
   },
   updateSetting: async (key, value) => {
     await fetch("/api/settings", {

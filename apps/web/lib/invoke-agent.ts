@@ -112,7 +112,7 @@ export async function invokeAgent({
       `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
     const callbackBaseUrl =
       process.env.AGENT_CALLBACK_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const callbackUrl = `${callbackBaseUrl}/api/agent-response?roomId=${encodeURIComponent(roomId)}&agentId=${encodeURIComponent(agentId)}`
+    const callbackUrl = `${callbackBaseUrl}/api/daemon/outcome`
 
     // Fetch room details and recent chat history
     const room = await prisma.room.findUnique({ where: { id: roomId, workspaceId: effectiveWorkspaceId } })
@@ -126,7 +126,7 @@ export async function invokeAgent({
     })
     const teammates = roomAgents
       .map((ra) => ra.agent)
-      .filter((a) => a.id !== agentId && (a.harness === "oz" || a.harness === "automomo-daemon"))
+      .filter((a) => a.id !== agentId && a.harness === "automomo-daemon")
 
     const recentMessages = await prisma.message.findMany({
       where: { roomId },
@@ -160,16 +160,9 @@ export async function invokeAgent({
         : "No tasks yet."
 
     const callbackInstructions = `
-IMPORTANT: After completing the user's request, you MUST send your response back to the chat using the send_message skill.
-The chat UI supports Markdown (headings, lists, bold, etc.).
-If you want to trigger another agent, include their @mention in normal text (do NOT wrap it in backticks/code).
-
-Call the send_message skill with:
-- callback_url: "${callbackUrl}"
-- task_id: "${invocationId}"
-- message: Your response to the user
-
-This is REQUIRED - your response will not be seen by the user unless you use send_message.
+AUTOMOMO RUNTIME:
+Return one final response for this task. automomo will publish the runtime outcome back into the room.
+The room UI supports Markdown. If you want to trigger another agent, include their @mention in normal text (do NOT wrap it in backticks/code).
 `
 
     const agentApiKey = process.env.AGENT_API_KEY || ""
@@ -285,7 +278,7 @@ To mention an agent, include @agent-name in your response message.
     let messageContent = dispatch.immediateMessage || "Task completed"
     let hasCallbackResponse = false
 
-    // Prefer the message that is persisted by /api/agent-response (so we survive serverless timeouts).
+    // Prefer any message already persisted by the runtime completion path.
     console.log("[invokeAgent] Waiting for callback message persistence:", invocationId)
     for (let i = 0; i < 15; i++) {
       try {

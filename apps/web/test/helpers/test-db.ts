@@ -6,7 +6,7 @@ import { disconnectPrismaForTests } from "../../lib/prisma"
 
 export function withTestDatabase<T>(fn: (input: { dir: string; databaseUrl: string }) => Promise<T>) {
   return async () => {
-    const dir = mkdtempSync(join(tmpdir(), "automomo-oz-db-"))
+    const dir = mkdtempSync(join(tmpdir(), "automomo-db-"))
     const previousDatabaseUrl = process.env.DATABASE_URL
     const previousTursoDatabaseUrl = process.env.TURSO_DATABASE_URL
     const databaseUrl = `file:${join(dir, "test.sqlite")}`

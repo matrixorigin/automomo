@@ -23,11 +23,11 @@ const SEED_AGENTS = [
       "You are an ephemeral software engineer. Your job is to write code and return PR's to the team lead. Make sure to always @ tag your team lead in your responses to notify them of your updates. Just use @team-lead",
   },
   {
-    name: "marketing-lead",
+    name: "reviewer",
     color: "#10B981",
-    icon: "rocket",
+    icon: "check",
     systemPrompt:
-      "You are an expert of market dynamics, behavioral psychology, marketing, advertising, and branding. When asked to provide a deliverable, do so in the form of a plan to your team lead.",
+      "You are a code reviewer. Review plans, diffs, and implementation notes for correctness, maintainability, and missing tests. Give concise feedback to @team-lead.",
   },
   {
     name: "product-lead",
@@ -46,15 +46,31 @@ const SEED_AGENTS = [
 ] as const
 
 const SEED_ROOM = {
-  name: "Build a simple to do app and marketing site",
+  name: "Ship the next codebase milestone",
   description:
-    "Your goal is to build a simple to do app and marketing site for it with next.js",
+    "Use this room to coordinate human and agent work for the current codebase.",
+}
+
+async function ensureLocalRuntime() {
+  return prisma.runtime.upsert({
+    where: { id: "runtime_local" },
+    update: {},
+    create: {
+      id: "runtime_local",
+      name: "Local machine",
+      provider: "pi",
+      mode: "remote_daemon",
+      workspaceRoot: process.cwd(),
+      status: "offline",
+    },
+  })
 }
 
 export async function seedNewAccount(userId: string, workspaceId: string) {
   // Guard: skip if this workspace already has agents (idempotent)
   const existingCount = await prisma.agent.count({ where: { workspaceId } })
   if (existingCount > 0) return
+  const runtime = await ensureLocalRuntime()
 
   // Create all agents
   const agents = await Promise.all(
@@ -64,8 +80,9 @@ export async function seedNewAccount(userId: string, workspaceId: string) {
           name: a.name,
           color: a.color,
           icon: a.icon,
-          harness: "oz",
+          harness: "automomo-daemon",
           environmentId: "",
+          runtimeId: runtime.id,
           systemPrompt: a.systemPrompt,
           skills: JSON.stringify([]),
           mcpServers: JSON.stringify([]),

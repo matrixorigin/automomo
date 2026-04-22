@@ -24,7 +24,7 @@ describe("runtime schema contract", () => {
     expect(agentRun).toMatch(/\bharness\s+String\s+@default\("automomo-daemon"\)/)
   })
 
-  it("wires runs back to Oz rooms, agents, runtimes, and leases", async () => {
+  it("wires runs back to automomo rooms, agents, runtimes, and leases", async () => {
     const schema = await readSchema()
     const room = modelBlock(schema, "Room")
     const agent = modelBlock(schema, "Agent")

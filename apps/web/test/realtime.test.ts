@@ -135,7 +135,7 @@ describe("local run realtime events", () => {
         depth: 0,
         userId: "user_1",
         workspaceId: "workspace_1",
-        callbackUrl: "http://localhost:3000/api/agent-response",
+        callbackUrl: "http://localhost:3000/api/daemon/outcome",
         chatHistory: "",
         taskSummary: "No tasks yet.",
         teammateInstructions: "",

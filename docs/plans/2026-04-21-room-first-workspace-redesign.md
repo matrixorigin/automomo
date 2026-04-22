@@ -11,8 +11,8 @@
 Input source:
 
 - User direction: "we need ot make a plan for this. we can discard the control plan idea."
-- Previous design review conclusion: automomo currently exposes backend nouns as flat CRUD pages, while `oz-workspace` makes rooms the main collaboration surface.
-- Reference implementation: `/Users/randomradio/src/oz-workspace`, especially:
+- Previous design review conclusion: automomo currently exposes backend nouns as flat CRUD pages, while room-first collaboration should make rooms the main surface.
+- Reference implementation notes, especially:
   - `components/app-sidebar.tsx`
   - `app/(workspace)/room/[roomId]/page.tsx`
   - `components/chat-stream.tsx`
@@ -59,7 +59,7 @@ Current automomo state:
 - API currently does not expose status update routes for work item board moves.
 - Web app has no component primitive layer beyond custom CSS in `globals.css`.
 
-Reference `oz-workspace` patterns to borrow:
+Room workspace patterns to borrow:
 
 - Sidebar groups live rooms and agents under a workspace identity.
 - Room page has one compact header and tabs.
@@ -73,7 +73,7 @@ Architecture conclusion:
 
 - Keep automomo's stronger backend/runtime model.
 - Replace the UI mental model from "manage orchestration objects" to "work with agents in rooms."
-- Use Oz as the interaction reference, not as a codebase to copy wholesale.
+- Use the room interaction model as a reference, not as a codebase to copy wholesale.
 
 ## Architecture Decision
 
@@ -120,7 +120,7 @@ Reasoning:
 
 - automomo currently has no Tailwind pipeline.
 - A full shadcn migration would turn this plan into a styling migration and delay product correction.
-- We can still borrow Oz's interaction architecture with local primitives: `Button`, `IconButton`, `Tabs`, `Badge`, `Avatar`, `Panel`, `TextField`, `Textarea`, `Dialog`.
+- We can still borrow the interaction architecture with local primitives: `Button`, `IconButton`, `Tabs`, `Badge`, `Avatar`, `Panel`, `TextField`, `Textarea`, `Dialog`.
 - Tailwind/shadcn can be reconsidered after the room-first architecture proves itself.
 
 ## Task 1: Write Room-First Product Architecture Doc
@@ -476,7 +476,7 @@ Reasoning:
 
 - [ ] Step 4: Implement `MentionTextarea`.
 
-  Borrow Oz behavior:
+  Borrow room-workspace behavior:
 
   - Detect `@` at start or after whitespace/punctuation.
   - Filter agents by query.
@@ -1033,4 +1033,3 @@ Recommended commit sequence:
 - Global Work Items and Sessions are cross-room reporting/operations views.
 - Desktop and mobile Chrome validation passes without layout overlap.
 - `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `git diff --check` pass.
-

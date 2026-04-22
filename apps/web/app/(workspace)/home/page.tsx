@@ -2,22 +2,21 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { KeyIcon, RobotIcon, HashIcon, AtIcon } from "@phosphor-icons/react"
+import { TerminalWindowIcon, RobotIcon, HashIcon, AtIcon } from "@phosphor-icons/react"
 import { CreateRoomDialog } from "@/components/create-room-dialog"
 
 const steps = [
   {
-    icon: KeyIcon,
-    title: "Enter your Warp API Key",
+    icon: TerminalWindowIcon,
+    title: "Start your local runtime",
     description:
-      "Go to Settings and paste your Warp API key. This is required to run agents.",
-    link: { href: "/settings", label: "Open Settings" },
+      "Run the automomo daemon on the machine that owns the codebase. The daemon registers the runtime, claims agent work, and posts results back to rooms.",
   },
   {
     icon: RobotIcon,
     title: "Create Agents",
     description:
-      "Use the + button next to Agents in the sidebar to create your first agent. Give it a name, system prompt, and environment ID.",
+      "Use the + button next to Agents in the sidebar to create your first local agent. Give it a name, system prompt, and optional runtime ID.",
     link: { href: "/agents", label: "Manage Agents" },
   },
   {
@@ -45,10 +44,10 @@ export default function HomePage() {
       </header>
       <div className="flex-1 overflow-auto px-6">
         <div className="mx-auto max-w-lg" style={{ paddingTop: "4rem", paddingBottom: "4rem" }}>
-          <h2 className="text-lg font-semibold">Welcome to Oz Workspace</h2>
+          <h2 className="text-lg font-semibold">Welcome to automomo</h2>
           <p className="text-sm text-muted-foreground leading-relaxed" style={{ marginTop: "0.5rem" }}>
-            Oz is a multi-agent chat room where you can create AI agents,
-            assign them to project rooms, and collaborate through conversation.
+            automomo is a room-based workspace where humans and agents coordinate
+            against local codebase runtimes.
           </p>
 
           <h3 className="text-sm font-semibold" style={{ marginTop: "3rem", marginBottom: "1.5rem" }}>Getting Started</h3>

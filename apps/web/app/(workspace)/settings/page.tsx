@@ -1,13 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { EyeIcon, EyeSlashIcon, FloppyDiskIcon, CopyIcon, TrashIcon } from "@phosphor-icons/react"
+import { CopyIcon, TrashIcon } from "@phosphor-icons/react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useSettingsStore, useWorkspaceStore } from "@/lib/stores"
+import { useWorkspaceStore } from "@/lib/stores"
 
 export default function SettingsPage() {
-  const { settings, fetchSettings, updateSetting } = useSettingsStore()
   const {
     workspace,
     members,
@@ -20,11 +19,6 @@ export default function SettingsPage() {
     removeMember,
   } = useWorkspaceStore()
 
-  const [apiKey, setApiKey] = React.useState("")
-  const [showKey, setShowKey] = React.useState(false)
-  const [saving, setSaving] = React.useState(false)
-  const [saved, setSaved] = React.useState(false)
-
   const [teamError, setTeamError] = React.useState<string | null>(null)
   const [inviteBusy, setInviteBusy] = React.useState(false)
   const [generatedInviteUrl, setGeneratedInviteUrl] = React.useState("")
@@ -34,17 +28,10 @@ export default function SettingsPage() {
   const [origin, setOrigin] = React.useState("")
 
   React.useEffect(() => {
-    fetchSettings()
     fetchWorkspace()
     fetchMembers()
     fetchInvites()
-  }, [fetchSettings, fetchWorkspace, fetchMembers, fetchInvites])
-
-  React.useEffect(() => {
-    if (settings.warp_api_key !== undefined) {
-      setApiKey(settings.warp_api_key)
-    }
-  }, [settings.warp_api_key])
+  }, [fetchWorkspace, fetchMembers, fetchInvites])
 
   React.useEffect(() => {
     setOrigin(window.location.origin)
@@ -59,14 +46,6 @@ export default function SettingsPage() {
   React.useEffect(() => {
     setCopiedLatestInvite(false)
   }, [generatedInviteUrl])
-
-  const handleSave = async () => {
-    setSaving(true)
-    await updateSetting("warp_api_key", apiKey)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
 
   const handleCreateInvite = async () => {
     setTeamError(null)
@@ -129,42 +108,6 @@ export default function SettingsPage() {
       </header>
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-3xl space-y-8">
-          <section className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="warp-api-key">
-              Warp API Key
-            </label>
-            <p className="text-xs text-muted-foreground">
-              This key is shared by everyone in this workspace. Open Warp and go to Settings &gt; Platform to create an API key.
-            </p>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  id="warp-api-key"
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Enter your Warp API key"
-                  className="pr-9"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showKey ? (
-                    <EyeSlashIcon className="h-4 w-4" />
-                  ) : (
-                    <EyeIcon className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              <Button onClick={handleSave} disabled={saving}>
-                <FloppyDiskIcon className="h-4 w-4" />
-                {saved ? "Saved" : "Save"}
-              </Button>
-            </div>
-          </section>
-
           <section className="space-y-4">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold">Team Management</h2>

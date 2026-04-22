@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Oz Workspace",
-  description: "A collaborative AI agent workspace",
+  title: "automomo",
+  description: "A collaborative human and AI workspace for codebases",
 };
 
 export default function RootLayout({

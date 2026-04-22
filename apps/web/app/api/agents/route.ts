@@ -26,12 +26,33 @@ export async function POST(request: Request) {
     const { userId, workspaceId } = await getAuthenticatedWorkspaceContext()
     const body = await request.json()
     const harness = typeof body.harness === "string" ? body.harness : "automomo-daemon"
+    if (harness !== "automomo-daemon" && harness !== "openclaw") {
+      return NextResponse.json({ error: "Unsupported agent harness" }, { status: 400 })
+    }
     const selectedRuntimeId =
       typeof body.runtimeId === "string"
         ? body.runtimeId.trim()
         : typeof body.selectedRuntimeId === "string"
           ? body.selectedRuntimeId.trim()
           : ""
+    const runtimeId =
+      harness === "automomo-daemon"
+        ? selectedRuntimeId || "runtime_local"
+        : null
+    if (runtimeId) {
+      await prisma.runtime.upsert({
+        where: { id: runtimeId },
+        update: {},
+        create: {
+          id: runtimeId,
+          name: runtimeId === "runtime_local" ? "Local machine" : runtimeId,
+          provider: "pi",
+          mode: "remote_daemon",
+          workspaceRoot: process.cwd(),
+          status: "offline",
+        },
+      })
+    }
     const agent = await prisma.agent.create({
       data: {
         name: body.name,
@@ -39,8 +60,8 @@ export async function POST(request: Request) {
         icon: body.icon ?? "robot",
         repoUrl: body.repoUrl ?? "",
         harness,
-        environmentId: harness === "oz" ? body.environmentId ?? "" : "",
-        runtimeId: harness === "automomo-daemon" && selectedRuntimeId ? selectedRuntimeId : null,
+        environmentId: "",
+        runtimeId,
         systemPrompt: body.systemPrompt ?? "",
         openclawConfig: stringifyOpenClawConfig(body.openclawConfig),
         skills: JSON.stringify(body.skills ?? []),

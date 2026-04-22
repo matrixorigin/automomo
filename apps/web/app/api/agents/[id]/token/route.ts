@@ -25,7 +25,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (existing.harness !== "openclaw") {
-      return NextResponse.json({ error: "Token auth is only available for OpenClaw agents" }, { status: 400 })
+      return NextResponse.json({ error: "Token auth is only available for external agents" }, { status: 400 })
     }
 
     const token = generateAgentAccessToken()

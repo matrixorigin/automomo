@@ -133,7 +133,7 @@ export async function POST(request: Request) {
           })
         }
 
-        const dispatchAgents = [...targets.ozAgents, ...targets.daemonAgents]
+        const dispatchAgents = targets.daemonAgents
 
         // Set agents to "running" NOW so the client sees the thinking state
         // immediately after the POST response (before after() fires).

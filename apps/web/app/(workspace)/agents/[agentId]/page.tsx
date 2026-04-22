@@ -36,7 +36,6 @@ export default function AgentDetailPage({
   const [saving, setSaving] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
   const [dirty, setDirty] = React.useState(false)
-  const [copied, setCopied] = React.useState(false)
   const [tokenValue, setTokenValue] = React.useState("")
   const [copiedToken, setCopiedToken] = React.useState(false)
   const [copiedSkill, setCopiedSkill] = React.useState(false)
@@ -85,7 +84,7 @@ export default function AgentDetailPage({
       }
 
       if (latestAgent.harness !== "openclaw") {
-        setTokenError("Switch harness to OpenClaw, save, then generate a token.")
+        setTokenError("Switch harness to External, save, then generate a token.")
         return
       }
       const res = await fetch(`/api/agents/${agent.id}/token`, { method: "POST" })
@@ -132,28 +131,28 @@ export default function AgentDetailPage({
       DEFAULT_OPENCLOW_CONFIG.pollIntervalSeconds
 
     const skill = `---
-name: oz-room-mentions
-description: Poll oz-workspace for @mentions and post agent responses back to rooms.
-metadata: {"openclaw":{"category":"collaboration","api_base":"${baseUrl}/api/agent/mentions"}}
+name: automomo-room-mentions
+description: Poll automomo for @mentions and post agent responses back to rooms.
+metadata: {"automomo":{"category":"collaboration","api_base":"${baseUrl}/api/agent/mentions"}}
 ---
 
-# oz-workspace room mentions
+# automomo room mentions
 
-Use this skill to let an OpenClaw personal assistant respond to room \`@mentions\` in oz-workspace.
+Use this skill to let an external assistant respond to room \`@mentions\` in automomo.
 
 ## Preconfigured values
 
-- \`OZ_WORKSPACE_BASE_URL=${baseUrl}\`
-- \`OZ_WORKSPACE_AGENT_ID=${agent.id}\`
-- \`OZ_WORKSPACE_AGENT_TOKEN=${tokenValue}\`
+- \`AUTOMOMO_BASE_URL=${baseUrl}\`
+- \`AUTOMOMO_AGENT_ID=${agent.id}\`
+- \`AUTOMOMO_AGENT_TOKEN=${tokenValue}\`
 
 ## Poll for mention work
 
 \`\`\`bash
-curl -s -X POST "$OZ_WORKSPACE_BASE_URL/api/agent/mentions/poll" \\
-  -H "Authorization: Bearer $OZ_WORKSPACE_AGENT_TOKEN" \\
+curl -s -X POST "$AUTOMOMO_BASE_URL/api/agent/mentions/poll" \\
+  -H "Authorization: Bearer $AUTOMOMO_AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d "{\\"agentId\\":\\"$OZ_WORKSPACE_AGENT_ID\\"}"
+  -d "{\\"agentId\\":\\"$AUTOMOMO_AGENT_ID\\"}"
 \`\`\`
 
 The response contains a \`mentions\` array. For each mention:
@@ -169,10 +168,10 @@ The response contains a \`mentions\` array. For each mention:
 ## Send response
 
 \`\`\`bash
-curl -s -X POST "$OZ_WORKSPACE_BASE_URL/api/agent/mentions/respond" \\
-  -H "Authorization: Bearer $OZ_WORKSPACE_AGENT_TOKEN" \\
+curl -s -X POST "$AUTOMOMO_BASE_URL/api/agent/mentions/respond" \\
+  -H "Authorization: Bearer $AUTOMOMO_AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d "{\\"agentId\\":\\"$OZ_WORKSPACE_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"content\\":\\"YOUR_RESPONSE\\"}"
+  -d "{\\"agentId\\":\\"$AUTOMOMO_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"content\\":\\"YOUR_RESPONSE\\"}"
 \`\`\`
 
 ## Release mention (optional)
@@ -180,10 +179,10 @@ curl -s -X POST "$OZ_WORKSPACE_BASE_URL/api/agent/mentions/respond" \\
 If the task cannot be completed now, release it back to the queue:
 
 \`\`\`bash
-curl -s -X POST "$OZ_WORKSPACE_BASE_URL/api/agent/mentions/release" \\
-  -H "Authorization: Bearer $OZ_WORKSPACE_AGENT_TOKEN" \\
+curl -s -X POST "$AUTOMOMO_BASE_URL/api/agent/mentions/release" \\
+  -H "Authorization: Bearer $AUTOMOMO_AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d "{\\"agentId\\":\\"$OZ_WORKSPACE_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"reason\\":\\"temporary failure\\"}"
+  -d "{\\"agentId\\":\\"$AUTOMOMO_AGENT_ID\\",\\"mentionId\\":\\"MENTION_ID\\",\\"reason\\":\\"temporary failure\\"}"
 \`\`\`
 
 ## Heartbeat guidance
@@ -300,25 +299,16 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
                 </Button>
                 <Button
                   type="button"
-                  variant={agent.harness === "oz" ? "default" : "ghost"}
-                  size="sm"
-                  className="h-7 px-3 text-xs"
-                  onClick={() => update({ harness: "oz" as HarnessType })}
-                >
-                  Oz
-                </Button>
-                <Button
-                  type="button"
                   variant={agent.harness === "openclaw" ? "default" : "ghost"}
                   size="sm"
                   className="h-7 px-3 text-xs"
                   onClick={() => update({ harness: "openclaw" as HarnessType })}
                 >
-                  OpenClaw
+                  External
                 </Button>
               </div>
             </Field>
-            {agent.harness === "automomo-daemon" ? (
+            {agent.harness !== "openclaw" ? (
               <>
                 <Field>
                   <FieldLabel htmlFor="detail-runtime">Runtime ID</FieldLabel>
@@ -339,69 +329,17 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
                   />
                 </Field>
               </>
-            ) : agent.harness === "oz" ? (
-              <>
-                <Field>
-                  <FieldLabel htmlFor="detail-env">Environment ID</FieldLabel>
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    <p>To create an environment:</p>
-                    <ol className="list-decimal ml-4 space-y-0.5">
-                      <li>Clone the <a href="https://github.com/warpdotdev/oz_workspace_agent" target="_blank" rel="noopener noreferrer" className="underline text-foreground">oz_workspace_agent</a> repository.</li>
-                      <li>Visit <a href="https://oz.warp.dev/environments" target="_blank" rel="noopener noreferrer" className="underline text-foreground">oz.warp.dev/environments</a>, auth with your GitHub account, and add the cloned repo to a new environment.</li>
-                      <li>Enter the environment ID below.</li>
-                    </ol>
-                  </div>
-                  <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs text-muted-foreground">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-500">Tip</span>
-                        <p>Copy instructions into Warp to get Oz to set up your env</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-xs shrink-0"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            "clone this repository to my github account https://github.com/warpdotdev/oz_workspace_agent and create an oz environment using it, then return the environment ID"
-                          )
-                          setCopied(true)
-                          setTimeout(() => setCopied(false), 2000)
-                        }}
-                      >
-                        {copied ? "Copied!" : "Copy"}
-                      </Button>
-                    </div>
-                  </div>
-                  <Input
-                    id="detail-env"
-                    value={agent.environmentId}
-                    onChange={(e) => update({ environmentId: e.target.value })}
-                    placeholder="e.g. your-environment-id"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="detail-prompt">System Prompt</FieldLabel>
-                  <Textarea
-                    id="detail-prompt"
-                    value={agent.systemPrompt}
-                    onChange={(e) => update({ systemPrompt: e.target.value })}
-                    rows={5}
-                  />
-                </Field>
-              </>
             ) : (
               <>
                 <Field>
-                  <FieldLabel>OpenClaw mention settings</FieldLabel>
+                  <FieldLabel>External mention settings</FieldLabel>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <label htmlFor="detail-openclaw-poll-interval" className="text-xs text-muted-foreground">
                         Poll interval (seconds)
                       </label>
                       <p className="text-[10px] leading-tight text-muted-foreground">
-                        How often OpenClaw checks for new queued mentions.
+                        How often the worker checks for new queued mentions.
                       </p>
                       <Input
                         id="detail-openclaw-poll-interval"
@@ -467,9 +405,9 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
                   </div>
                 </Field>
                 <Field>
-                  <FieldLabel>OpenClaw access token</FieldLabel>
+                  <FieldLabel>External worker access token</FieldLabel>
                   <p className="text-xs text-muted-foreground">
-                    Install this token in your OpenClaw skill and call `/api/agent/mentions/poll`, `/respond`, and `/release` with `Authorization: Bearer &lt;token&gt;`.
+                    Install this token in the external worker and call `/api/agent/mentions/poll`, `/respond`, and `/release` with `Authorization: Bearer &lt;token&gt;`.
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Input

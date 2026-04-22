@@ -392,7 +392,7 @@ async function dispatchMentionedAgents({
       })
     }
 
-    const dispatchTargets = [...targets.ozAgents, ...targets.daemonAgents]
+    const dispatchTargets = targets.daemonAgents
     if (dispatchTargets.length === 0) return
 
     let mentionedAgents = dispatchTargets

@@ -75,7 +75,7 @@ async function seedRoom(input: {
         name: agent.name,
         harness: agent.harness ?? "automomo-daemon",
         runtimeId: (agent.harness ?? "automomo-daemon") === "automomo-daemon" ? "runtime_1" : null,
-        environmentId: agent.harness === "oz" ? "env_1" : "",
+        environmentId: "",
         workspaceId: "workspace_1",
       },
     })
@@ -124,19 +124,17 @@ describe("mention dispatch", () => {
     await seedRoom({
       roomAgents: [
         { id: "agent_builder", name: "Builder" },
-        { id: "agent_oz", name: "Ozzy", harness: "oz" },
         { id: "agent_poll", name: "Poller", harness: "openclaw" },
       ],
     })
 
     const targets = await getMentionDispatchTargets({
       roomId: "room_1",
-      content: "Please ask @Builder, @Ozzy, and @Poller.",
+      content: "Please ask @Builder and @Poller.",
     })
 
-    expect(targets.mentionedAgents.map((agent) => agent.name)).toEqual(["Builder", "Ozzy", "Poller"])
+    expect(targets.mentionedAgents.map((agent) => agent.name)).toEqual(["Builder", "Poller"])
     expect(targets.daemonAgents.map((agent) => agent.name)).toEqual(["Builder"])
-    expect(targets.ozAgents.map((agent) => agent.name)).toEqual(["Ozzy"])
     expect(targets.openClawAgents.map((agent) => agent.name)).toEqual(["Poller"])
   }))
 

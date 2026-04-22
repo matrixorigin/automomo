@@ -59,7 +59,7 @@ export default function AgentsPage() {
                   {agent.harness === "automomo-daemon"
                     ? (agent.runtimeId || "No runtime")
                     : agent.harness === "openclaw"
-                      ? "OpenClaw mention polling"
+                      ? "External mention polling"
                       : (agent.environmentId || "No environment")}
                 </CardDescription>
               </CardHeader>

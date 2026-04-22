@@ -25,7 +25,7 @@ export async function authenticateOpenClawAgent(
   })
 
   if (!agent || agent.harness !== "openclaw") {
-    return { error: NextResponse.json({ error: "OpenClaw agent not found" }, { status: 404 }) }
+    return { error: NextResponse.json({ error: "External agent not found" }, { status: 404 }) }
   }
 
   if (!verifyAgentAccessToken(token, agent.agentTokenHash)) {
