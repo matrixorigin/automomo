@@ -5,6 +5,7 @@ import {
   AgentRunOutcomeUploadSchema,
   ArtifactCreateInputSchema,
   ArtifactSchema,
+  RuntimeFinalOutputSchema,
   ApiKeySchema,
   AuditEventSchema,
   CodebaseSchema,
@@ -78,16 +79,49 @@ describe("automomo protocol schemas", () => {
     });
     const createInput = ArtifactCreateInputSchema.parse({
       type: "review",
-      title: "Review notes"
+      title: "Review notes",
+      taskId: null
     });
 
     expect(artifact.type).toBe("patch");
     expect(artifact.metadata.filesChanged).toEqual(["file"]);
     expect(createInput.metadata).toEqual({});
+    expect(createInput.taskId).toBeNull();
     expect(() =>
       ArtifactCreateInputSchema.parse({
         type: "sheet",
         title: "Old sheet"
+      })
+    ).toThrow();
+  });
+
+  it("models runtime final output artifacts as optional review surfaces", () => {
+    const withoutArtifacts = RuntimeFinalOutputSchema.parse({
+      status: "success",
+      summary: "Done",
+      result: { ok: true }
+    });
+    const withArtifacts = RuntimeFinalOutputSchema.parse({
+      status: "success",
+      summary: "Done",
+      result: {},
+      artifacts: [
+        {
+          type: "review",
+          title: "Review notes",
+          content: "No blocking issues."
+        }
+      ]
+    });
+
+    expect(withoutArtifacts.artifacts).toEqual([]);
+    expect(withArtifacts.artifacts[0]?.type).toBe("review");
+    expect(() =>
+      RuntimeFinalOutputSchema.parse({
+        status: "success",
+        summary: "Done",
+        result: {},
+        artifacts: [{ type: "sheet", title: "Legacy sheet" }]
       })
     ).toThrow();
   });

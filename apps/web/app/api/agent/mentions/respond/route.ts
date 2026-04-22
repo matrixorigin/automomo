@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
+import { OutcomeArtifactInputSchema } from "@automomo/protocol"
 import { prisma } from "@/lib/prisma"
 import { authenticateOpenClawAgent } from "@/lib/agent-token-auth"
+import { createRoomArtifact, validateArtifactReferences } from "@/lib/artifacts"
 import { eventBroadcaster } from "@/lib/event-broadcaster"
 import { getMentionDispatchTargets, enqueueOpenClawMentions } from "@/lib/mention-dispatch"
 class MentionCompletionRaceError extends Error {
@@ -19,13 +21,48 @@ export async function POST(request: Request) {
     requestedMentionId = mentionId
     const content = typeof body.content === "string" ? body.content.trim() : ""
     const sessionUrl = typeof body.sessionUrl === "string" ? body.sessionUrl : null
+    const parsedArtifacts = OutcomeArtifactInputSchema.array().default([]).safeParse(body.artifacts ?? [])
 
     if (!agentId || !mentionId || !content) {
       return NextResponse.json({ error: "agentId, mentionId, and content are required" }, { status: 400 })
     }
+    if (!parsedArtifacts.success) {
+      return NextResponse.json(
+        { error: parsedArtifacts.error.issues[0]?.message ?? "Invalid artifacts" },
+        { status: 400 }
+      )
+    }
 
     const auth = await authenticateOpenClawAgent(request, agentId)
     if ("error" in auth) return auth.error
+    const artifacts = parsedArtifacts.data
+
+    if (artifacts.length > 0) {
+      const mentionForArtifacts = await prisma.agentMention.findUnique({
+        where: { id: mentionId },
+        select: {
+          agentId: true,
+          roomId: true,
+          room: { select: { workspaceId: true } },
+        },
+      })
+      if (!mentionForArtifacts || mentionForArtifacts.agentId !== agentId) {
+        return NextResponse.json({ error: "Mention not found" }, { status: 404 })
+      }
+
+      for (const artifactInput of artifacts) {
+        const referenceError = await validateArtifactReferences({
+          workspaceId: mentionForArtifacts.room.workspaceId ?? "",
+          roomId: mentionForArtifacts.roomId,
+          taskId: artifactInput.taskId,
+          createdBy: agentId,
+        })
+        if (referenceError) {
+          return NextResponse.json({ error: referenceError }, { status: 400 })
+        }
+      }
+    }
+
     const now = new Date()
     const completion = await prisma.$transaction(async (tx) => {
       const mention = await tx.agentMention.findUnique({
@@ -136,6 +173,18 @@ export async function POST(request: Request) {
       },
     })
 
+    const createdArtifacts = []
+    for (const artifactInput of artifacts) {
+      createdArtifacts.push(
+        await createRoomArtifact({
+          ...artifactInput,
+          roomId: mention.roomId,
+          createdBy: agentId,
+          userId: mention.room.userId ?? null,
+        })
+      )
+    }
+
     eventBroadcaster.broadcast({
       type: "message",
       roomId: mention.roomId,
@@ -164,6 +213,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: { ...message, author: message.agent, agent: undefined },
+      artifacts: createdArtifacts,
     })
   } catch (error) {
     if (error instanceof MentionCompletionRaceError) {

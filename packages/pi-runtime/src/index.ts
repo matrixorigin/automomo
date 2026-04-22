@@ -2,9 +2,9 @@ import {
   Agent,
   OutcomeArtifactInput,
   Outcome,
-  OutcomeSchema,
   PiRuntimeConfig,
   PiRuntimeConfigSchema,
+  RuntimeFinalOutputSchema,
   Runtime,
   Session,
   SessionEvent,
@@ -124,7 +124,8 @@ export function createPiSdkRunner(options: {
         outcome: {
           ...decoded.outcome,
           eventsUploaded: events.length + decoded.events.length
-        }
+        },
+        artifacts: decoded.artifacts
       };
     }
   };
@@ -150,7 +151,8 @@ export function composePiPrompt(context: PiRuntimeContext) {
     context.workItem?.labels.length ? `Labels: ${context.workItem.labels.join(", ")}` : undefined,
     orchestration ? `Orchestration: ${JSON.stringify(orchestration)}` : undefined,
     "Return a final fenced JSON object matching this shape:",
-    '{"status":"success|failed|needs_human","summary":"short summary","result":{}}',
+    '{"status":"success|failed|needs_human","summary":"short room message","result":{},"artifacts":[{"type":"plan|patch|review|pr|document|log","title":"Human-readable title","content":"Reviewable details","url":null,"taskId":null,"metadata":{}}]}',
+    "Use artifacts for reviewable outputs: plans, patch summaries, review notes, PR links, longer documents, and validation logs. Keep chat summaries short.",
     "Do not include credentials or environment values in the final result."
   ];
   return parts.filter(Boolean).join("\n\n");
@@ -226,16 +228,14 @@ export function decodePiOutcome(input: {
   text: string;
   createdAt: string;
   eventOffset?: number;
-}): { outcome: Outcome; events: SessionEvent[] } {
+}): { outcome: Outcome; events: SessionEvent[]; artifacts: OutcomeArtifactInput[] } {
   const jsonText = extractJson(input.text);
   if (!jsonText) {
     return failedDecode(input, "Pi runtime did not return JSON");
   }
 
   try {
-    const parsed = OutcomeSchema.omit({ id: true, sessionId: true, eventsUploaded: true, createdAt: true }).parse(
-      JSON.parse(jsonText)
-    );
+    const parsed = RuntimeFinalOutputSchema.parse(JSON.parse(jsonText));
     return {
       outcome: {
         id: `outcome_${input.sessionId}`,
@@ -246,7 +246,8 @@ export function decodePiOutcome(input: {
         eventsUploaded: 0,
         createdAt: input.createdAt
       },
-      events: []
+      events: [],
+      artifacts: parsed.artifacts
     };
   } catch (err) {
     return failedDecode(input, err instanceof Error ? err.message : "Pi runtime returned malformed JSON");
@@ -331,7 +332,8 @@ function failedDecode(input: { sessionId: string; createdAt: string; eventOffset
       eventsUploaded: 1,
       createdAt: input.createdAt
     },
-    events: [event]
+    events: [event],
+    artifacts: []
   };
 }
 

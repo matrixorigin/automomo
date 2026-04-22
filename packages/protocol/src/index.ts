@@ -118,9 +118,9 @@ export const ArtifactCreateInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   content: z.string().default(""),
   url: z.string().url().nullable().optional(),
-  runId: IdSchema.optional(),
-  environmentId: IdSchema.optional(),
-  taskId: IdSchema.optional(),
+  runId: IdSchema.nullable().optional(),
+  environmentId: IdSchema.nullable().optional(),
+  taskId: IdSchema.nullable().optional(),
   metadata: ArtifactMetadataSchema
 });
 
@@ -653,6 +653,13 @@ export const OutcomeArtifactInputSchema = ArtifactCreateInputSchema.omit({
   environmentId: true
 });
 
+export const RuntimeFinalOutputSchema = z.object({
+  status: z.enum(["success", "failed", "needs_human"]),
+  summary: z.string().trim().min(1),
+  result: MetadataSchema,
+  artifacts: z.array(OutcomeArtifactInputSchema).default([])
+});
+
 export const AgentRunOutcomeUploadSchema = z.object({
   runtimeId: IdSchema,
   leaseId: IdSchema,
@@ -818,6 +825,7 @@ export type AgentRunLease = z.infer<typeof AgentRunLeaseSchema>;
 export type AgentRunLeaseResponse = z.infer<typeof AgentRunLeaseResponseSchema>;
 export type AgentRunEventUpload = z.infer<typeof AgentRunEventUploadSchema>;
 export type OutcomeArtifactInput = z.infer<typeof OutcomeArtifactInputSchema>;
+export type RuntimeFinalOutput = z.infer<typeof RuntimeFinalOutputSchema>;
 export type AgentRunOutcomeUpload = z.infer<typeof AgentRunOutcomeUploadSchema>;
 export type AgentRunFailureUpload = z.infer<typeof AgentRunFailureUploadSchema>;
 export type WorkItemUpsertRequest = z.infer<typeof WorkItemUpsertRequestSchema>;

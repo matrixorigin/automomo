@@ -81,6 +81,8 @@ describe("Pi runtime SDK adapter", () => {
     expect(prompt).toContain("rule_1");
     expect(prompt).toContain("Work carefully.");
     expect(prompt).toContain("fenced JSON");
+    expect(prompt).toContain("artifacts");
+    expect(prompt).toContain("patch summaries");
     expect(prompt).not.toContain("secret");
   });
 
@@ -100,14 +102,22 @@ describe("Pi runtime SDK adapter", () => {
   it("decodes fenced JSON outcomes and preserves malformed output as failure", () => {
     const success = decodePiOutcome({
       sessionId: "session_1",
-      text: "```json\n{\"status\":\"success\",\"summary\":\"Done\",\"result\":{\"ok\":true}}\n```",
+      text: "```json\n{\"status\":\"success\",\"summary\":\"Done\",\"result\":{\"ok\":true},\"artifacts\":[{\"type\":\"patch\",\"title\":\"Current diff\",\"content\":\"diff --git a/file b/file\"}]}\n```",
       createdAt: now
     });
     const malformed = decodePiOutcome({ sessionId: "session_1", text: "not json", createdAt: now });
+    const invalidArtifact = decodePiOutcome({
+      sessionId: "session_1",
+      text: "{\"status\":\"success\",\"summary\":\"Done\",\"result\":{},\"artifacts\":[{\"type\":\"sheet\",\"title\":\"Legacy\"}]}",
+      createdAt: now
+    });
 
     expect(success.outcome).toMatchObject({ status: "success", summary: "Done", result: { ok: true } });
+    expect(success.artifacts[0]).toMatchObject({ type: "patch", title: "Current diff" });
     expect(malformed.outcome.status).toBe("failed");
     expect(malformed.events[0]?.kind).toBe("failure");
+    expect(invalidArtifact.outcome.status).toBe("failed");
+    expect(invalidArtifact.artifacts).toEqual([]);
   });
 
   it("runs SDK mode with an injected session factory", async () => {
@@ -118,7 +128,7 @@ describe("Pi runtime SDK adapter", () => {
         calls.push(prompt);
         return {
           events: [{ type: "text_delta", text: "working" }],
-          finalText: "{\"status\":\"needs_human\",\"summary\":\"Need input\",\"result\":{\"question\":\"approve?\"}}"
+          finalText: "{\"status\":\"needs_human\",\"summary\":\"Need input\",\"result\":{\"question\":\"approve?\"},\"artifacts\":[{\"type\":\"review\",\"title\":\"Review note\",\"content\":\"Please approve.\"}]}"
         };
       }
     });
@@ -128,6 +138,7 @@ describe("Pi runtime SDK adapter", () => {
     expect(calls[0]).toContain("Fix runtime lease");
     expect(result.events.map((event) => event.kind)).toContain("text");
     expect(result.outcome).toMatchObject({ status: "needs_human", summary: "Need input" });
+    expect(result.artifacts?.[0]).toMatchObject({ type: "review", title: "Review note" });
   });
 
   it("adapts the default Pi createAgentSession SDK path without making a live model call in tests", async () => {
