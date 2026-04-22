@@ -1,6 +1,6 @@
 "use client";
 
-import type { RoomMessage } from "@automomo/protocol";
+import type { Agent, RoomMessage } from "@automomo/protocol";
 import React from "react";
 import { RoomChatStream } from "./RoomChatStream";
 
@@ -10,8 +10,8 @@ export function RoomChatComposer({
   initialMessages = []
 }: {
   roomId: string;
-  agents: { id: string; name: string }[];
+  agents: Pick<Agent, "id" | "name" | "metadata">[];
   initialMessages?: RoomMessage[];
 }) {
-  return <RoomChatStream roomId={roomId} initialMessages={initialMessages} agentNames={agents.map((agent) => agent.name)} />;
+  return <RoomChatStream roomId={roomId} initialMessages={initialMessages} agents={agents} />;
 }

@@ -1,28 +1,36 @@
 "use client";
 
-import type { RoomMessage } from "@automomo/protocol";
+import type { Agent, RoomMessage } from "@automomo/protocol";
 import React, { Fragment, useMemo, useState } from "react";
 import { findMentionMatches } from "../lib/mentions";
+import { AgentAvatar } from "./AgentAvatar";
 import { MentionTextarea } from "./MentionTextarea";
 
 export function RoomChatStream({
   roomId,
   initialMessages,
+  agents = [],
   agentNames
 }: {
   roomId: string;
   initialMessages: RoomMessage[];
-  agentNames: string[];
+  agents?: Pick<Agent, "id" | "name" | "metadata">[];
+  agentNames?: string[];
 }) {
   const [messages, setMessages] = useState(() => [...initialMessages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
-  const [authorName, setAuthorName] = useState("Operator");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const orderedAgentNames = useMemo(() => [...new Set(agentNames)], [agentNames]);
+  const orderedAgentNames = useMemo(
+    () => [...new Set(agentNames ?? agents.map((agent) => agent.name))],
+    [agentNames, agents]
+  );
+  const agentsByName = useMemo(
+    () => new Map(agents.map((agent) => [agent.name.toLowerCase(), agent])),
+    [agents]
+  );
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function sendCurrentMessage() {
     const messageBody = body.trim();
     if (!messageBody || isSending) {
       return;
@@ -35,7 +43,7 @@ export function RoomChatStream({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          author: { type: "human", name: authorName.trim() || "Operator" },
+          author: { type: "human", name: "Operator" },
           body: messageBody
         })
       });
@@ -56,43 +64,103 @@ export function RoomChatStream({
     }
   }
 
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void sendCurrentMessage();
+  }
+
+  function handleComposerKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void sendCurrentMessage();
+    }
+  }
+
   return (
     <section className="room-chat-stream" aria-label="Room chat stream">
-      <form className="chat-composer" data-json-endpoint={`/api/rooms/${roomId}/messages`} onSubmit={submit}>
-        <label>
-          <span>Author</span>
-          <input name="authorName" value={authorName} onChange={(event) => setAuthorName(event.target.value)} />
-        </label>
-        <label className="wide">
-          <span>Message</span>
-          <MentionTextarea value={body} onChange={setBody} agentNames={orderedAgentNames} />
-        </label>
-        <button type="submit" disabled={isSending}>
-          {isSending ? "Sending..." : "Send message"}
-        </button>
-      </form>
+      <div className="message-thread" aria-label="Room messages">
+        {messages.length === 0 ? <p className="message-empty">No messages yet. Start the room conversation.</p> : null}
+        {messages.map((message) => {
+          const agent = message.author.type === "agent" ? agentsByName.get(message.author.name.toLowerCase()) : undefined;
+          return (
+            <article className={`message-row message-${message.author.type}`} key={message.id}>
+              <MessageAvatar author={message.author} agent={agent} />
+              <div className="message-row-body">
+                <header>
+                  <strong>{formatAuthor(message.author)}</strong>
+                  <span>{formatMessageTime(message.createdAt)}</span>
+                </header>
+                <p>{renderBodyWithMentions(message.body, orderedAgentNames)}</p>
+              </div>
+            </article>
+          );
+        })}
+      </div>
       {error ? (
         <p className="chat-error" role="alert">
           {error}
         </p>
       ) : null}
-      <div className="message-thread" aria-label="Room messages">
-        {messages.map((message) => (
-          <article className={`message-row message-${message.author.type}`} key={message.id}>
-            <div>
-              <strong>{formatAuthor(message.author)}</strong>
-              <span>{message.createdAt}</span>
-            </div>
-            <p>{renderBodyWithMentions(message.body, orderedAgentNames)}</p>
-          </article>
-        ))}
-      </div>
+      <form className="chat-composer" data-json-endpoint={`/api/rooms/${roomId}/messages`} onSubmit={submit}>
+        <div className="chat-composer-field">
+          <MentionTextarea
+            value={body}
+            onChange={setBody}
+            onKeyDown={handleComposerKeyDown}
+            agentNames={orderedAgentNames}
+            placeholder="Message this room..."
+            rows={1}
+          />
+        </div>
+        <button className="chat-send-button" type="submit" disabled={isSending || !body.trim()} aria-label="Send message">
+          {isSending ? "..." : "Send"}
+        </button>
+      </form>
     </section>
   );
 }
 
 function formatAuthor(author: RoomMessage["author"]) {
-  return author.type === "agent" ? `Agent ${author.name}` : author.type === "human" ? `Human ${author.name}` : author.name;
+  if (author.type === "system") {
+    return author.name || "automomo";
+  }
+  return author.name || "Operator";
+}
+
+function formatMessageTime(timestamp: string) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function MessageAvatar({
+  author,
+  agent
+}: {
+  author: RoomMessage["author"];
+  agent?: Pick<Agent, "id" | "name" | "metadata">;
+}) {
+  if (agent) {
+    return <AgentAvatar agent={agent} />;
+  }
+  const label = author.type === "system" ? "automomo" : author.name || "Operator";
+  const initials = author.type === "system" ? "A" : getInitials(label);
+  const ariaLabel = author.type === "human" ? `Human ${label}` : author.type === "agent" ? `Agent ${label}` : label;
+  return (
+    <span className={`message-avatar message-avatar-${author.type}`} aria-label={ariaLabel}>
+      {initials}
+    </span>
+  );
+}
+
+function getInitials(name: string) {
+  const chunks = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  if (chunks.length === 0) {
+    return "?";
+  }
+  return chunks.map((chunk) => chunk[0]?.toUpperCase() ?? "").join("");
 }
 
 function renderBodyWithMentions(body: string, agentNames: string[]) {

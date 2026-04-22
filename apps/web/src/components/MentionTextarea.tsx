@@ -6,6 +6,7 @@ import { findMentionQueryAtCursor, normalizeMentionName } from "../lib/mentions"
 export function MentionTextarea({
   value,
   onChange,
+  onKeyDown,
   agentNames,
   placeholder = "Mention agents with @Ralph, ask for a plan, or leave runtime notes.",
   rows = 4,
@@ -13,6 +14,7 @@ export function MentionTextarea({
 }: {
   value: string;
   onChange: (nextValue: string) => void;
+  onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   agentNames: string[];
   placeholder?: string;
   rows?: number;
@@ -100,7 +102,9 @@ export function MentionTextarea({
     if (event.key === "Escape") {
       event.preventDefault();
       setIsMenuOpen(false);
+      return;
     }
+    onKeyDown?.(event);
   }
 
   function closeMenu() {

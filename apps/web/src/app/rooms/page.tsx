@@ -1,9 +1,7 @@
 import React from "react";
 import { AppShell } from "../../components/AppShell";
-import { DataRow, DataRows } from "../../components/DataRows";
 import { EmptyState } from "../../components/EmptyState";
 import { RoomEditor } from "../../components/RoomEditor";
-import { Totals } from "../../components/Totals";
 import { WorkspaceHeader } from "../../components/WorkspaceHeader";
 import { getApiClient } from "../../lib/api";
 
@@ -33,114 +31,133 @@ export default async function RoomsPage() {
 
   return (
     <AppShell active="Rooms" overview={overview} rooms={rooms.items} agents={agents}>
-      <WorkspaceHeader section="Rooms" title="Room collaboration" action="New room" />
-      <section className="schedule">
-        <RoomEditor codebases={codebases} />
-      </section>
-      <Totals
-        items={[
-          { label: "Rooms", value: roomList.length, caption: "shared spaces" },
-          { label: "Members", value: [...roomMemberships.values()].reduce((sum, items) => sum + items.length, 0), caption: "agent joins" },
-          { label: "Work", value: allRoomWorkItems.length, caption: "room cards" }
-        ]}
-      />
-      <DataRows title="Rooms" count={rooms.page.total}>
-        {roomList.length === 0 ? <EmptyState title="No rooms" body="Create a room to gather agents, messages, and tasks." /> : null}
-        {roomList.map((room) => {
-          const members = roomMemberships.get(room.id) ?? [];
-          const tasks = roomTasksByRoom.get(room.id) ?? [];
-          const work = roomWorkItemsByRoom.get(room.id) ?? [];
-          const latestTask = tasks[0];
-          const codebase = codebases.find((item) => item.id === room.codebaseId);
-          return (
-            <DataRow
-              key={room.id}
-              tone={room.status === "active" ? "green" : "grey"}
-              title={room.name}
-              subtitle={room.description || codebase?.name || "Room context"}
-              code={room.id.toUpperCase()}
-              status={room.status}
-              meta={[
-                {
-                  label: "Members",
-                  value: `${members.length} agent${members.length === 1 ? "" : "s"}`,
-                  caption: members.map((item) => item.agentId).join(", ") || "none"
-                },
-                {
-                  label: "Work",
-                  value: `${work.length} work item${work.length === 1 ? "" : "s"}`,
-                  caption: work[0]?.title ?? latestTask?.title ?? "none"
-                }
-              ]}
-              action="Open"
-              actionHref={`/rooms/${room.id}`}
-            />
-          );
-        })}
-      </DataRows>
-      <DataRows title="Room work" count={allRoomWorkItems.length}>
-        {allRoomWorkItems.length === 0 ? <EmptyState title="No room work" body="Work items assigned to rooms will appear here." /> : null}
-        {allRoomWorkItems.map((item) => {
-          const room = roomList.find((candidate) => candidate.id === item.roomId);
-          return (
-            <DataRow
-              key={item.id}
-              tone={item.status === "needs_human" ? "yellow" : item.status === "completed" ? "green" : "grey"}
-              title={item.title}
-              subtitle={item.body}
-              code={item.id.toUpperCase()}
-              status={item.status}
-              meta={[
-                { label: "Room", value: room?.name ?? item.roomId ?? "Unassigned", caption: item.priority },
-                { label: "Labels", value: item.labels.join(", ") || "none", caption: item.source }
-              ]}
-              action="Start"
-            />
-          );
-        })}
-      </DataRows>
-      <DataRows title="Recent messages" count={recentMessages.length}>
-        {recentMessages.length === 0 ? <EmptyState title="No messages" body="Room messages will appear here as agents and humans coordinate." /> : null}
-        {recentMessages.map((message) => {
-          const room = roomList.find((item) => item.id === message.roomId);
-          return (
-            <DataRow
-              key={message.id}
-              tone="grey"
-              title={message.body}
-              subtitle={formatAuthor(message.author)}
-              code={message.id.toUpperCase()}
-              status={message.author.type}
-              meta={[
-                { label: "Room", value: room?.name ?? message.roomId, caption: room?.codebaseId ?? "codebase" },
-                { label: "Kind", value: message.author.type, caption: "author" }
-              ]}
-            />
-          );
-        })}
-      </DataRows>
-      <DataRows title="Room subtasks" count={recentTasks.length}>
-        {recentTasks.length === 0 ? <EmptyState title="No room subtasks" body="Small checklist tasks can be linked to room work items." /> : null}
-        {recentTasks.map((task) => {
-          const room = roomList.find((item) => item.id === task.roomId);
-          const assigned = agents.find((agent) => agent.id === task.assignedAgentId);
-          const workItem = allRoomWorkItems.find((item) => item.id === task.workItemId);
-          return (
-            <DataRow
-              key={task.id}
-              tone={task.status === "blocked" ? "yellow" : "green"}
-              title={task.title}
-              subtitle={task.body}
-              code={task.id.toUpperCase()}
-              status={task.status}
-              meta={[
-                { label: "Room", value: room?.name ?? task.roomId, caption: room?.codebaseId ?? "codebase" },
-                { label: "Agent", value: assigned?.name ?? "unassigned", caption: workItem?.title ?? "no work item" }
-              ]}
-            />
-          );
-        })}
-      </DataRows>
+      <div className="workspace-page">
+        <WorkspaceHeader section="Rooms" title="Rooms" action={{ label: "New room", href: "#new-room" }} />
+        <section className="rooms-index">
+          <div className="rooms-index-main">
+            <div className="rooms-index-summary" aria-label="Room summary">
+              <div>
+                <span>Rooms</span>
+                <strong>{roomList.length}</strong>
+              </div>
+              <div>
+                <span>Members</span>
+                <strong>{[...roomMemberships.values()].reduce((sum, items) => sum + items.length, 0)}</strong>
+              </div>
+              <div>
+                <span>Work</span>
+                <strong>{allRoomWorkItems.length}</strong>
+              </div>
+            </div>
+
+            <div className="room-card-list">
+              {roomList.length === 0 ? <EmptyState title="No rooms" body="Create a room to gather agents, messages, and tasks." /> : null}
+              {roomList.map((room) => {
+                const members = roomMemberships.get(room.id) ?? [];
+                const tasks = roomTasksByRoom.get(room.id) ?? [];
+                const work = roomWorkItemsByRoom.get(room.id) ?? [];
+                const latestTask = tasks[0];
+                const codebase = codebases.find((item) => item.id === room.codebaseId);
+                return (
+                  <article className="room-directory-card" key={room.id}>
+                    <div className="room-directory-mark" aria-hidden="true">
+                      #
+                    </div>
+                    <div className="room-directory-copy">
+                      <div className="room-directory-title">
+                        <h2>{room.name}</h2>
+                        <span className={`status-pill status-${room.status}`}>{room.status}</span>
+                      </div>
+                      <p>{room.description || codebase?.name || "Room context"}</p>
+                      <div className="room-directory-meta">
+                        <span>{codebase?.name ?? room.codebaseId}</span>
+                        <span>{members.length} agents</span>
+                        <span>{work.length} work items</span>
+                      </div>
+                    </div>
+                    <div className="room-directory-activity">
+                      <span>Latest</span>
+                      <strong>{work[0]?.title ?? latestTask?.title ?? "No activity yet"}</strong>
+                    </div>
+                    <a className="room-directory-open" href={`/rooms/${room.id}`}>
+                      Open
+                    </a>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+
+          <aside className="rooms-index-side" aria-label="Room controls and activity">
+            <section className="room-create-panel" id="new-room">
+              <header>
+                <h2>New room</h2>
+              </header>
+              <RoomEditor codebases={codebases} />
+            </section>
+
+            <section className="rooms-activity-panel">
+              <header>
+                <h2>Room work</h2>
+                <span>{allRoomWorkItems.length}</span>
+              </header>
+              <div className="rooms-activity-list">
+                {allRoomWorkItems.length === 0 ? <EmptyState title="No room work" body="Work items assigned to rooms will appear here." /> : null}
+                {allRoomWorkItems.slice(0, 5).map((item) => {
+                  const room = roomList.find((candidate) => candidate.id === item.roomId);
+                  return (
+                    <article className="rooms-activity-item" key={item.id}>
+                      <strong>{item.title}</strong>
+                      <p>{item.body}</p>
+                      <span>{room?.name ?? item.roomId ?? "Unassigned"} / {item.status.replaceAll("_", " ")}</span>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rooms-activity-panel">
+              <header>
+                <h2>Recent messages</h2>
+                <span>{recentMessages.length}</span>
+              </header>
+              <div className="rooms-activity-list">
+                {recentMessages.length === 0 ? <EmptyState title="No messages" body="Room messages will appear here as agents and humans coordinate." /> : null}
+                {recentMessages.map((message) => {
+                  const room = roomList.find((item) => item.id === message.roomId);
+                  return (
+                    <article className="rooms-activity-item" key={message.id}>
+                      <strong>{formatAuthor(message.author)}</strong>
+                      <p>{message.body}</p>
+                      <span>{room?.name ?? message.roomId}</span>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rooms-activity-panel">
+              <header>
+                <h2>Room subtasks</h2>
+                <span>{recentTasks.length}</span>
+              </header>
+              <div className="rooms-activity-list">
+                {recentTasks.length === 0 ? <EmptyState title="No subtasks" body="Small checklist tasks can be linked to room work items." /> : null}
+                {recentTasks.map((task) => {
+                  const assigned = agents.find((agent) => agent.id === task.assignedAgentId);
+                  return (
+                    <article className="rooms-activity-item" key={task.id}>
+                      <strong>{task.title}</strong>
+                      <p>{task.body}</p>
+                      <span>{assigned?.name ?? "unassigned"} / {task.status.replaceAll("_", " ")}</span>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </aside>
+        </section>
+      </div>
     </AppShell>
   );
 }

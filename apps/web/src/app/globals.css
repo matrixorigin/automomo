@@ -43,7 +43,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   letter-spacing: 0;
 }
@@ -492,6 +493,14 @@ a {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.workspace-page {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
 .status-strip {
   min-height: 38px;
   display: flex;
@@ -675,28 +684,42 @@ a {
 }
 
 .room-workspace-context {
-  padding: 10px 30px;
+  padding: 8px 30px;
   border-bottom: 1px solid var(--line);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .room-runtime-panel {
   display: grid;
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 14px;
+}
+
+.room-runtime-panel .floor-heading {
+  min-height: 34px;
+  border-bottom: 0;
+}
+
+.room-runtime-panel .floor-heading h2 {
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .room-runtime-cards {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px;
 }
 
 .room-runtime-card {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--white);
-  padding: 12px;
+  padding: 9px 10px;
   display: grid;
-  gap: 8px;
+  gap: 5px;
 }
 
 .room-runtime-card header {
@@ -708,7 +731,7 @@ a {
 
 .room-runtime-card header span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .room-runtime-card-row {
@@ -717,10 +740,11 @@ a {
   justify-content: space-between;
   gap: 10px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .room-runtime-workspace-root {
+  display: none;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -758,9 +782,52 @@ a {
 }
 
 .room-tab-support {
-  margin-top: 12px;
+  margin-top: 0;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 0;
+}
+
+.room-tab-support summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.room-tab-support summary::-webkit-details-marker {
+  display: none;
+}
+
+.room-tab-support summary::after {
+  content: "Open";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.room-tab-support[open] summary::after {
+  content: "Close";
+}
+
+.room-tab-support summary span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.room-tab-support .editor-panel {
+  border-bottom: 0;
+  padding-bottom: 10px;
+}
+
+.room-tab-support .agent-roster {
+  border-bottom: 0;
+  padding: 0 0 10px;
 }
 
 .room-work-board {
@@ -1023,7 +1090,7 @@ a {
 .room-workspace-panel-chat > .schedule {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
   overflow: hidden;
   padding-top: 0;
 }
@@ -1034,35 +1101,30 @@ a {
 
 .room-chat-stream {
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
 .chat-composer {
   order: 3;
   display: grid;
-  grid-template-columns: minmax(120px, 0.3fr) minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
   border-top: 1px solid var(--line);
   background: var(--surface);
-  padding: 12px 0 0;
-  position: sticky;
-  bottom: 0;
+  padding: 10px 12px;
+  position: static;
   z-index: 2;
 }
 
-.chat-composer label {
-  display: grid;
-  gap: 6px;
+.chat-composer-field {
   min-width: 0;
-}
-
-.chat-composer label span {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .chat-composer input,
@@ -1089,12 +1151,13 @@ a {
 
 .mention-dropdown {
   position: absolute;
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
   z-index: 5;
   display: grid;
   gap: 0;
-  margin: 6px 0 0;
+  margin: 0;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--white);
@@ -1123,7 +1186,18 @@ a {
   background: #fbffd3;
 }
 
-.chat-composer button,
+.chat-composer .mention-dropdown {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.chat-composer .mention-textarea-input {
+  max-height: 116px;
+  resize: none;
+  line-height: 1.4;
+}
+
+.chat-send-button,
 .mention-bar button {
   min-height: 32px;
   border: 1px solid var(--line-strong);
@@ -1132,6 +1206,22 @@ a {
   color: var(--ink);
   cursor: pointer;
   padding: 0 10px;
+}
+
+.chat-send-button {
+  min-width: 48px;
+  min-height: 38px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.chat-send-button:disabled {
+  border-color: var(--line);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .mention-bar {
@@ -1148,37 +1238,81 @@ a {
 
 .message-thread {
   order: 1;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: grid;
-  align-content: start;
-  padding-right: 4px;
+  display: block;
+  padding: 8px 0;
+}
+
+.message-empty {
+  margin: 18px 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .message-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 0.28fr) minmax(0, 1fr);
-  gap: 14px;
-  border-bottom: 1px solid var(--line);
-  padding: 14px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 0;
+  padding: 8px 12px;
 }
 
-.message-row strong,
-.message-row span {
-  display: block;
+.message-row:hover {
+  background: var(--surface-subtle);
 }
 
-.message-row span {
-  margin-top: 4px;
+.message-row .agent-avatar,
+.message-avatar {
+  flex: 0 0 28px;
+}
+
+.message-avatar {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #6f6f68;
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.message-avatar-system {
+  background: var(--ink);
+}
+
+.message-row-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.message-row-body header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.message-row-body strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.message-row-body span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
 }
 
-.message-row p {
-  margin: 0;
-  font-size: 14px;
+.message-row-body p {
+  margin: 2px 0 0;
+  color: #22221f;
+  font-size: 13px;
   line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .mention-token {
@@ -1189,7 +1323,7 @@ a {
 }
 
 .message-agent p {
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .chat-error {
@@ -1356,6 +1490,7 @@ a {
   padding: 0 10px;
 }
 
+.status-active,
 .status-ready,
 .status-online,
 .status-completed {
@@ -1524,6 +1659,259 @@ a {
   padding: 12px 0;
 }
 
+.rooms-index {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 18px;
+  overflow: auto;
+  padding: 18px 30px 30px;
+}
+
+.rooms-index-main,
+.rooms-index-side {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.rooms-index-side {
+  position: sticky;
+  top: 18px;
+}
+
+.rooms-index-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+
+.rooms-index-summary div {
+  min-height: 76px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border-right: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.rooms-index-summary div:last-child {
+  border-right: 0;
+}
+
+.rooms-index-summary span,
+.room-directory-meta,
+.room-directory-activity span,
+.rooms-activity-panel header span,
+.rooms-activity-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rooms-index-summary strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.room-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.room-directory-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1.25fr) minmax(160px, 0.55fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.room-directory-card:hover {
+  border-color: var(--line-strong);
+  background: #fbfbf8;
+}
+
+.room-directory-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.room-directory-copy,
+.room-directory-activity {
+  min-width: 0;
+}
+
+.room-directory-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.room-directory-title h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-directory-title .status-pill {
+  min-width: auto;
+  min-height: 22px;
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+.room-directory-copy p,
+.rooms-activity-item p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.room-directory-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.room-directory-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  padding: 0 8px;
+}
+
+.room-directory-activity {
+  display: grid;
+  gap: 4px;
+}
+
+.room-directory-activity strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.room-directory-open {
+  min-width: 64px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.room-directory-open:hover {
+  border-color: var(--ink);
+}
+
+.room-create-panel,
+.rooms-activity-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.room-create-panel > header,
+.rooms-activity-panel > header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding: 0 12px;
+}
+
+.room-create-panel h2,
+.rooms-activity-panel h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.room-create-panel .editor-panel {
+  grid-template-columns: 1fr;
+  border-bottom: 0;
+  padding: 12px;
+}
+
+.room-create-panel .editor-panel .wide {
+  grid-column: auto;
+}
+
+.room-create-panel .editor-panel textarea {
+  min-height: 76px;
+  padding-top: 8px;
+}
+
+.room-create-panel .editor-panel button {
+  min-height: 36px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.rooms-activity-list {
+  display: grid;
+}
+
+.rooms-activity-item {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+}
+
+.rooms-activity-item:last-child {
+  border-bottom: 0;
+}
+
+.rooms-activity-item strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.rooms-activity-item p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rooms-activity-item span {
+  display: block;
+  margin-top: 6px;
+}
+
 .route-state {
   display: flex;
   align-items: center;
@@ -1602,6 +1990,7 @@ a {
   .totals,
   .settings-grid,
   .editor-panel,
+  .rooms-index,
   .room-work-board-columns,
   .detail-panel dl,
   .room-sessions-panel,
@@ -1699,6 +2088,34 @@ a {
     bottom: auto;
     z-index: auto;
     padding-top: 10px;
+  }
+
+  .room-chat-stream .chat-composer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px;
+  }
+
+  .rooms-index {
+    padding: 12px 16px 20px;
+  }
+
+  .rooms-index-side {
+    position: static;
+  }
+
+  .room-directory-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .room-directory-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .room-directory-activity,
+  .room-directory-open {
+    grid-column: 2;
   }
 
   .message-row {

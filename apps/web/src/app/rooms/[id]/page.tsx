@@ -89,12 +89,10 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
               </h2>
             </div>
             <RoomChatComposer roomId={room.id} agents={joinedAgents} initialMessages={messages} />
-            <div className="room-tab-support">
-              <div className="floor-heading">
-                <h2>
-                  Agents <span>{joinedAgents.length}</span>
-                </h2>
-              </div>
+            <details className="room-tab-support">
+              <summary>
+                Agents <span>{joinedAgents.length}</span>
+              </summary>
               <RoomAgentJoinForm roomId={room.id} agents={agents} joinedAgentIds={roomAgents.map((item) => item.agentId)} />
               <div className="agent-roster">
                 {joinedAgents.length === 0 ? <EmptyState title="No agents joined" body="Add an agent before sending @mentions." /> : null}
@@ -105,7 +103,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                   </div>
                 ))}
               </div>
-            </div>
+            </details>
           </section>
         }
         boardContent={
