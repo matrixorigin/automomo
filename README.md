@@ -25,8 +25,11 @@ pnpm install
 Run the web app:
 
 ```bash
-AUTH_SECRET=automomo-local-dev-secret pnpm dev
+pnpm dev:local
 ```
+
+This starts the web app on `http://localhost:3003` with a local development
+`AUTH_SECRET`.
 
 Run the local daemon against the web app from the workspace you want agents to use:
 

@@ -7,6 +7,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @automomo/web dev",
+    "dev:local": "AUTH_SECRET=automomo-local-dev-secret pnpm --dir apps/web exec next dev --port 3003",
     "dev:daemon": "pnpm --filter @automomo/daemon dev -- start --api-url http://localhost:3000",
     "docker:pi": "docker compose run --rm automomo-pi-env pi --help",
     "lint": "pnpm -r lint",
