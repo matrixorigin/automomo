@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
+import { serializeEnvironmentSummary } from "@/lib/environments"
 
 export interface OpenClawConfig {
   pollIntervalSeconds: number
@@ -85,6 +86,12 @@ type SerializedAgentSource = {
   openclawConfig?: string
   agentTokenHash?: string | null
   agentTokenPreview?: string | null
+  runtimeId?: string | null
+  runtime?: Parameters<typeof serializeEnvironmentSummary>[0]
+  systemPrompt?: string
+  environmentId?: string
+  role?: string
+  description?: string
   [key: string]: unknown
 }
 
@@ -95,11 +102,25 @@ export function serializeAgentForClient<T extends SerializedAgentSource>(agent: 
     scripts,
     openclawConfig,
     agentTokenHash,
+    runtime,
+    runtimeId,
+    systemPrompt,
+    environmentId,
     ...rest
   } = agent
 
+  const defaultEnvironmentId = runtimeId ?? environmentId ?? null
+
   return {
     ...rest,
+    runtimeId,
+    environmentId: defaultEnvironmentId ?? "",
+    defaultEnvironmentId,
+    systemPrompt: systemPrompt ?? "",
+    instructions: systemPrompt ?? "",
+    role: typeof rest.role === "string" ? rest.role : "",
+    description: typeof rest.description === "string" ? rest.description : "",
+    environment: serializeEnvironmentSummary(runtime),
     skills: parseJsonArray(skills),
     mcpServers: parseJsonArray(mcpServers),
     scripts: parseJsonArray(scripts),

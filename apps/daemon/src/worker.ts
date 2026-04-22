@@ -135,10 +135,17 @@ export function agentRunLeaseToPiContext(lease: AgentRunLease, now: Date = new D
       id: lease.agent.id,
       name: lease.agent.name,
       model: lease.runtime.provider,
-      instructions: lease.agent.systemPrompt,
+      role: lease.agent.role,
+      description: lease.agent.description,
+      instructions: [
+        lease.agent.role ? `Role: ${lease.agent.role}` : "",
+        lease.agent.description ? `Description: ${lease.agent.description}` : "",
+        lease.agent.systemPrompt
+      ].filter(Boolean).join("\n\n"),
       skills: lease.agent.skills,
       tools: [],
       defaultRuntimeId: lease.runtime.id,
+      defaultEnvironmentId: lease.runtime.id,
       maxConcurrency: 1,
       metadata: { mcpServers: lease.agent.mcpServers },
       createdAt: timestamp,

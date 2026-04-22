@@ -31,8 +31,10 @@ export function CreateAgentDialog({
 }) {
   const { createAgent } = useAgentStore()
   const [name, setName] = React.useState("")
-  const [runtimeId, setRuntimeId] = React.useState("")
-  const [systemPrompt, setSystemPrompt] = React.useState("")
+  const [role, setRole] = React.useState("")
+  const [description, setDescription] = React.useState("")
+  const [environmentId, setEnvironmentId] = React.useState("")
+  const [instructions, setInstructions] = React.useState("")
   const [harness, setHarness] = React.useState<HarnessType>("automomo-daemon")
   const [openclawConfig, setOpenclawConfig] = React.useState({
     pollIntervalSeconds: 30,
@@ -51,18 +53,24 @@ export function CreateAgentDialog({
     try {
       await createAgent({
         name: name.trim(),
-        environmentId: "",
-        runtimeId: harness === "automomo-daemon" ? runtimeId.trim() || null : null,
+        role: role.trim(),
+        description: description.trim(),
+        environmentId: harness === "automomo-daemon" ? environmentId.trim() || undefined : "",
+        defaultEnvironmentId: harness === "automomo-daemon" ? environmentId.trim() || undefined : undefined,
+        runtimeId: harness === "automomo-daemon" ? environmentId.trim() || undefined : null,
         harness,
-        systemPrompt: harness === "openclaw" ? "" : systemPrompt.trim(),
+        instructions: harness === "openclaw" ? "" : instructions.trim(),
+        systemPrompt: harness === "openclaw" ? "" : instructions.trim(),
         openclawConfig,
         color,
         icon,
       })
       onOpenChange(false)
       setName("")
-      setRuntimeId("")
-      setSystemPrompt("")
+      setRole("")
+      setDescription("")
+      setEnvironmentId("")
+      setInstructions("")
       setHarness("automomo-daemon")
       setOpenclawConfig({
         pollIntervalSeconds: 30,
@@ -116,6 +124,26 @@ export function CreateAgentDialog({
                 </div>
               </Field>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="agent-role">Role</FieldLabel>
+                <Input
+                  id="agent-role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="e.g. builder"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="agent-description">Description</FieldLabel>
+                <Input
+                  id="agent-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Implements focused code changes"
+                />
+              </Field>
+            </div>
             <Field>
               <FieldLabel>Icon</FieldLabel>
               <IconPicker value={icon} onChange={setIcon} />
@@ -146,20 +174,20 @@ export function CreateAgentDialog({
             {harness === "automomo-daemon" ? (
               <>
                 <Field>
-                  <FieldLabel htmlFor="agent-runtime">Runtime ID</FieldLabel>
+                  <FieldLabel htmlFor="agent-environment">Environment ID</FieldLabel>
                   <Input
-                    id="agent-runtime"
-                    value={runtimeId}
-                    onChange={(e) => setRuntimeId(e.target.value)}
-                    placeholder="e.g. runtime_local"
+                    id="agent-environment"
+                    value={environmentId}
+                    onChange={(e) => setEnvironmentId(e.target.value)}
+                    placeholder="e.g. environment_local"
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="agent-prompt">System Prompt</FieldLabel>
+                  <FieldLabel htmlFor="agent-prompt">Instructions</FieldLabel>
                   <Textarea
                     id="agent-prompt"
-                    value={systemPrompt}
-                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
                     placeholder="You are a backend engineering agent..."
                     rows={3}
                   />

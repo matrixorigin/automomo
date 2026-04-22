@@ -285,6 +285,26 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
               <FieldLabel>Icon</FieldLabel>
               <IconPicker value={agent.icon} onChange={(icon) => update({ icon })} />
             </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="detail-role">Role</FieldLabel>
+                <Input
+                  id="detail-role"
+                  value={agent.role ?? ""}
+                  onChange={(e) => update({ role: e.target.value })}
+                  placeholder="e.g. builder"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="detail-description">Description</FieldLabel>
+                <Input
+                  id="detail-description"
+                  value={agent.description ?? ""}
+                  onChange={(e) => update({ description: e.target.value })}
+                  placeholder="e.g. Implements focused code changes"
+                />
+              </Field>
+            </div>
             <Field>
               <FieldLabel>Harness</FieldLabel>
               <div className="inline-flex rounded-md border p-1">
@@ -311,20 +331,23 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
             {agent.harness !== "openclaw" ? (
               <>
                 <Field>
-                  <FieldLabel htmlFor="detail-runtime">Runtime ID</FieldLabel>
+                  <FieldLabel htmlFor="detail-environment">Environment ID</FieldLabel>
                   <Input
-                    id="detail-runtime"
-                    value={agent.runtimeId ?? ""}
-                    onChange={(e) => update({ runtimeId: e.target.value })}
-                    placeholder="e.g. runtime_local"
+                    id="detail-environment"
+                    value={agent.defaultEnvironmentId ?? agent.environmentId ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      update({ defaultEnvironmentId: value, environmentId: value, runtimeId: value })
+                    }}
+                    placeholder="e.g. environment_local"
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="detail-prompt">System Prompt</FieldLabel>
+                  <FieldLabel htmlFor="detail-prompt">Instructions</FieldLabel>
                   <Textarea
                     id="detail-prompt"
-                    value={agent.systemPrompt}
-                    onChange={(e) => update({ systemPrompt: e.target.value })}
+                    value={agent.instructions ?? agent.systemPrompt}
+                    onChange={(e) => update({ instructions: e.target.value, systemPrompt: e.target.value })}
                     rows={5}
                   />
                 </Field>

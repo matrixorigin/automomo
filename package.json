@@ -2,12 +2,13 @@
   "name": "automomo",
   "version": "0.1.0",
   "private": true,
-  "description": "automomo room workspace with a local daemon runtime.",
+  "description": "automomo room workspace with a local daemon environment.",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @automomo/web dev",
     "dev:daemon": "pnpm --filter @automomo/daemon dev -- start --api-url http://localhost:3000",
+    "docker:pi": "docker compose run --rm automomo-pi-env pi --help",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

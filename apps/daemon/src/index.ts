@@ -6,6 +6,7 @@ import { DaemonWorker } from "./worker";
 const args = parseDaemonArgs(process.argv.slice(2));
 const apiUrl = args.apiUrl;
 const runtimeName = process.env.AUTOMOMO_RUNTIME_NAME ?? "Local Pi runtime";
+const environmentId = process.env.AUTOMOMO_ENVIRONMENT_ID ?? process.env.AUTOMOMO_RUNTIME_ID ?? "environment_local";
 
 if (args.command === "doctor") {
   const result = await runDoctor({
@@ -24,6 +25,7 @@ if (args.command === "status") {
 const worker = new DaemonWorker({
   client: new DaemonApiClient({ baseUrl: apiUrl }),
   registration: {
+    runtimeId: environmentId,
     name: runtimeName,
     provider: "pi",
     environment: {

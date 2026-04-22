@@ -137,7 +137,7 @@ export function composePiPrompt(context: PiRuntimeContext) {
   const parts = [
     `You are ${agentName}, an automomo local room agent.`,
     `Run: ${context.session.id}`,
-    `Runtime: ${context.runtime.name} (${context.runtime.provider})`,
+    `Environment: ${context.runtime.name} (${context.runtime.provider})`,
     workspaceRoot ? `Workspace root: ${workspaceRoot}` : "Workspace root: unavailable",
     room ? `Room: ${room.name}${room.description ? `\nRoom description: ${room.description}` : ""}` : undefined,
     context.agent?.instructions ? `Agent instructions:\n${context.agent.instructions}` : undefined,

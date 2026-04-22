@@ -8,6 +8,7 @@ export type WorkspaceRole = "OWNER" | "MEMBER"
 
 export interface Room {
   id: string
+  codebaseId?: string | null
   name: string
   description: string
   paused?: boolean
@@ -23,17 +24,25 @@ export interface AgentSummary {
   icon: string
   status: AgentStatus
   activeRoomId?: string | null
+  role?: string
+  description?: string
+  defaultEnvironmentId?: string | null
+  environment?: Environment | null
 }
 
 export interface Agent {
   id: string
   name: string
+  role: string
+  description: string
   color: string
   icon: string
   repoUrl: string
   harness: HarnessType
   environmentId: string
   runtimeId?: string | null
+  defaultEnvironmentId?: string | null
+  instructions: string
   systemPrompt: string
   openclawConfig: {
     pollIntervalSeconds: number
@@ -48,6 +57,23 @@ export interface Agent {
   scripts: string[]
   status: AgentStatus
   createdAt: string
+  environment?: Environment | null
+}
+
+export interface Environment {
+  id: string
+  workspaceId?: string | null
+  codebaseId?: string | null
+  name: string
+  kind: "local" | "hosted"
+  workspaceRoot?: string
+  command: "pi"
+  status: "offline" | "online" | "busy" | "unhealthy"
+  capacity: number
+  activeRuns: number
+  lastHeartbeatAt?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Message {

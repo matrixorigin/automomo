@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { serializeAgentForClient } from "@/lib/openclaw"
 import {
   getAuthenticatedWorkspaceContext,
   AuthError,
@@ -17,12 +18,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       where: { id, workspaceId },
       include: {
         agents: {
-          include: { agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } } },
+          include: { agent: { include: { runtime: true } } },
         },
+        codebase: true,
       },
     })
     if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    return NextResponse.json({ ...room, agents: room.agents.map((ra) => ra.agent) })
+    return NextResponse.json({ ...room, agents: room.agents.map((ra) => serializeAgentForClient(ra.agent)) })
   } catch (error) {
     if (error instanceof AuthError) return unauthorizedResponse()
     if (error instanceof ForbiddenError) return forbiddenResponse(error.message)
@@ -41,6 +43,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const body = await req.json()
     const { agentIds, description } = body
+    const codebaseId =
+      body.codebaseId === undefined
+        ? undefined
+        : typeof body.codebaseId === "string" && body.codebaseId.trim().length > 0
+          ? body.codebaseId.trim()
+          : null
 
     if (agentIds !== undefined) {
       if (!Array.isArray(agentIds)) {
@@ -55,6 +63,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
       }
     }
+    if (codebaseId !== undefined && codebaseId !== null) {
+      const codebase = await prisma.codebase.findUnique({ where: { id: codebaseId, workspaceId } })
+      if (!codebase) return NextResponse.json({ error: "Codebase not found" }, { status: 404 })
+    }
 
     if (agentIds !== undefined) {
       await prisma.roomAgent.deleteMany({ where: { roomId: id } })
@@ -64,6 +76,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       where: { id },
       data: {
         ...(description !== undefined && { description }),
+        ...(codebaseId !== undefined && { codebaseId }),
         ...(agentIds !== undefined && {
           agents: {
             create: agentIds.map((agentId: string) => ({ agentId })),
@@ -72,14 +85,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       },
       include: {
         agents: {
-          include: { agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } } },
+          include: { agent: { include: { runtime: true } } },
         },
+        codebase: true,
       },
     })
 
     const roomData = {
       ...room,
-      agents: room.agents.map((ra) => ra.agent),
+      agents: room.agents.map((ra) => serializeAgentForClient(ra.agent)),
     }
 
     // Broadcast room update to SSE subscribers

@@ -1,0 +1,18 @@
+services:
+  automomo-pi-env:
+    build:
+      context: .
+      dockerfile: docker/pi-agent/Dockerfile
+    image: automomo/pi-agent:local
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AUTOMOMO_ENVIRONMENT_ID: ${AUTOMOMO_ENVIRONMENT_ID:-environment_local}
+    volumes:
+      - .:/workspace
+      - automomo-pi-home:/root
+
+volumes:
+  automomo-pi-home:

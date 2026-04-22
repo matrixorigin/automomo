@@ -32,11 +32,31 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members  WorkspaceMember[]
-  invites  WorkspaceInvite[]
-  rooms    Room[]
-  agents   Agent[]
-  settings Setting[]
+  members   WorkspaceMember[]
+  invites   WorkspaceInvite[]
+  rooms     Room[]
+  agents    Agent[]
+  settings  Setting[]
+  codebases Codebase[]
+  runtimes  Runtime[]
+}
+
+model Codebase {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  provider      String   @default("local")
+  sourceUrl     String   @default("")
+  workspaceRoot String   @default("")
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rooms     Room[]
+  runtimes  Runtime[]
+
+  @@index([workspaceId])
 }
 
 model WorkspaceMember {
@@ -104,12 +124,14 @@ model Room {
   description          String     @default("")
   paused               Boolean    @default(false)
   workspaceId          String?
+  codebaseId           String?
   userId               String?
   publicShareId        String?    @unique
   publicShareEnabledAt DateTime?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  codebase             Codebase?  @relation(fields: [codebaseId], references: [id], onDelete: SetNull)
 
   user           User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
   agents         RoomAgent[]
@@ -122,11 +144,14 @@ model Room {
   runs           AgentRun[]
 
   @@index([workspaceId])
+  @@index([codebaseId])
 }
 
 model Agent {
   id                String     @id @default(cuid())
   name              String
+  role              String     @default("")
+  description       String     @default("")
   color             String     @default("#3B82F6")
   icon              String     @default("robot")
   repoUrl           String     @default("")
@@ -282,20 +307,29 @@ model Runtime {
   id              String    @id @default(cuid())
   name            String
   provider        String    @default("pi")
+  kind            String    @default("local")
   mode            String    @default("remote_daemon")
   workspaceRoot   String    @default("")
+  command         String    @default("pi")
   environmentJson String    @default("{}")
   status          String    @default("offline")
   capacity        Int       @default(1)
   activeRuns      Int       @default(0)
   lastHeartbeatAt DateTime?
+  workspaceId     String?
+  codebaseId      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  agents  Agent[]
-  daemons Daemon[]
-  runs    AgentRun[]
-  leases  AgentRunLease[]
+  workspace Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  codebase  Codebase?       @relation(fields: [codebaseId], references: [id], onDelete: SetNull)
+  agents    Agent[]
+  daemons   Daemon[]
+  runs      AgentRun[]
+  leases    AgentRunLease[]
+
+  @@index([workspaceId])
+  @@index([codebaseId])
 }
 
 model Daemon {

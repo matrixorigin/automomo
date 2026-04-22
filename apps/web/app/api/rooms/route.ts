@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { serializeAgentForClient } from "@/lib/openclaw"
 import {
   getAuthenticatedWorkspaceContext,
   AuthError,
@@ -15,8 +16,9 @@ export async function GET() {
       where: { workspaceId },
       include: {
         agents: {
-          include: { agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } } },
+          include: { agent: { include: { runtime: true } } },
         },
+        codebase: true,
       },
       orderBy: { createdAt: "asc" },
     })
@@ -24,7 +26,7 @@ export async function GET() {
     return NextResponse.json(
       rooms.map((r) => ({
         ...r,
-        agents: r.agents.map((ra) => ra.agent),
+        agents: r.agents.map((ra) => serializeAgentForClient(ra.agent)),
       }))
     )
   } catch (error) {
@@ -39,6 +41,10 @@ export async function POST(request: Request) {
     const { userId, workspaceId } = await getAuthenticatedWorkspaceContext()
     const body = await request.json()
     const { name, description = "", agentIds = [] } = body
+    const codebaseId =
+      typeof body.codebaseId === "string" && body.codebaseId.trim().length > 0
+        ? body.codebaseId.trim()
+        : null
 
     if (!name || typeof name !== "string") {
       return NextResponse.json({ error: "name is required" }, { status: 400 })
@@ -52,11 +58,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "One or more agents are not in this workspace" }, { status: 400 })
       }
     }
+    if (codebaseId) {
+      const codebase = await prisma.codebase.findUnique({ where: { id: codebaseId, workspaceId } })
+      if (!codebase) return NextResponse.json({ error: "Codebase not found" }, { status: 404 })
+    }
 
     const room = await prisma.room.create({
       data: {
         name,
         description,
+        codebaseId,
         workspaceId,
         userId,
         agents: {
@@ -67,14 +78,15 @@ export async function POST(request: Request) {
       },
       include: {
         agents: {
-          include: { agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } } },
+          include: { agent: { include: { runtime: true } } },
         },
+        codebase: true,
       },
     })
 
     return NextResponse.json({
       ...room,
-      agents: room.agents.map((ra) => ra.agent),
+      agents: room.agents.map((ra) => serializeAgentForClient(ra.agent)),
     })
   } catch (error) {
     if (error instanceof AuthError) return unauthorizedResponse()

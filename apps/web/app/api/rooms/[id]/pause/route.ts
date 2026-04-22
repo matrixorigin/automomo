@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { serializeAgentForClient } from "@/lib/openclaw"
 import {
   getAuthenticatedWorkspaceContext,
   AuthError,
@@ -24,12 +25,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data: { paused },
       include: {
         agents: {
-          include: { agent: { select: { id: true, name: true, color: true, icon: true, status: true, activeRoomId: true } } },
+          include: { agent: { include: { runtime: true } } },
         },
       },
     })
 
-    const roomData = { ...room, agents: room.agents.map((ra) => ra.agent) }
+    const roomData = { ...room, agents: room.agents.map((ra) => serializeAgentForClient(ra.agent)) }
 
     eventBroadcaster.broadcast({ type: "room", roomId: id, data: roomData })
 

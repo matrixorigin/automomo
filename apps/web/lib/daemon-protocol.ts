@@ -3,6 +3,7 @@ import {
   DaemonSchema,
   RuntimeSchema,
 } from "@automomo/protocol"
+import { serializeEnvironment } from "@/lib/environments"
 import type { Daemon, Runtime } from "@/lib/generated/prisma/client"
 
 export function parseJsonObject(text: string | null | undefined): Record<string, unknown> {
@@ -57,6 +58,7 @@ export function serializeRegistrationResponse(input: {
   return DaemonRegistrationResponseSchema.parse({
     daemon: serializeDaemon(input.daemon),
     runtime: serializeRuntime(input.runtime),
+    environment: serializeEnvironment(input.runtime),
     secret: input.secret,
   })
 }

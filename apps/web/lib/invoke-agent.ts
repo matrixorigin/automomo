@@ -197,14 +197,14 @@ Base URL for notification API: ${callbackBaseUrl}
         ? `
 TEAMMATES IN THIS ROOM:
 You can @mention these agents to request their help. They will only respond when explicitly mentioned.
-${teammates.map((t) => `- @${t.name}: ${t.systemPrompt || "No description provided"}`).join("\n")}
+${teammates.map((t) => `- @${t.name}${t.role ? ` (${t.role})` : ""}: ${t.description || t.systemPrompt || "No description provided"}`).join("\n")}
 To mention an agent, include @agent-name in your response message (normal text; not inside \`code\`).
 To mention an agent, include @agent-name in your response message.
 `
         : ""
 
     const systemContext = agent.systemPrompt || "You are a helpful assistant."
-    const identityContext = `Your name is ${agent.name}.`
+    const identityContext = `Your name is ${agent.name}.\nRole: ${agent.role || "room agent"}\nDescription: ${agent.description || "No description provided."}`
     const roomContext = room?.description
       ? `\nRoom: ${room.name}\nRoom description: ${room.description}\n`
       : ""

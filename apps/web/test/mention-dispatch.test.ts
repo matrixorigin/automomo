@@ -106,17 +106,23 @@ describe("mention dispatch", () => {
 
     const response = await postAgent(jsonRequest("/api/agents", {
       name: "Builder",
-      runtimeId: "runtime_1",
-      environmentId: "env_should_not_apply",
+      role: "builder",
+      description: "Implements focused changes",
+      defaultEnvironmentId: "runtime_1",
+      instructions: "Build carefully",
     }))
     expect(response.status).toBe(200)
     const payload = await response.json()
 
     expect(payload).toMatchObject({
       name: "Builder",
+      role: "builder",
+      description: "Implements focused changes",
       harness: "automomo-daemon",
       runtimeId: "runtime_1",
-      environmentId: "",
+      environmentId: "runtime_1",
+      defaultEnvironmentId: "runtime_1",
+      instructions: "Build carefully",
     })
   }))
 

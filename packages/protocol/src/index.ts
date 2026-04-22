@@ -21,11 +21,30 @@ export const CodebaseSchema = z.object({
   updatedAt: ISODateString
 });
 
+export const EnvironmentKindSchema = z.enum(["local", "hosted"]);
+export const EnvironmentStatusSchema = z.enum(["offline", "online", "busy", "unhealthy"]);
+
+export const EnvironmentSchema = z.object({
+  id: IdSchema,
+  workspaceId: IdSchema.optional(),
+  codebaseId: IdSchema.optional(),
+  name: z.string().trim().min(1),
+  kind: EnvironmentKindSchema.default("local"),
+  workspaceRoot: z.string().trim().min(1).optional(),
+  command: z.literal("pi").default("pi"),
+  status: EnvironmentStatusSchema.default("offline"),
+  capacity: z.number().int().positive().default(1),
+  activeRuns: z.number().int().nonnegative().default(0),
+  lastHeartbeatAt: ISODateString.optional(),
+  createdAt: ISODateString,
+  updatedAt: ISODateString
+});
+
 export const RoomStatusSchema = z.enum(["active", "archived"]);
 
 export const RoomSchema = z.object({
   id: IdSchema,
-  codebaseId: IdSchema,
+  codebaseId: IdSchema.optional(),
   name: z.string().trim().min(1),
   description: z.string().default(""),
   status: RoomStatusSchema.default("active"),
@@ -233,11 +252,14 @@ export const RuntimeSchema = z.object({
 export const AgentSchema = z.object({
   id: IdSchema,
   name: z.string().trim().min(1),
+  role: z.string().default(""),
+  description: z.string().default(""),
   model: z.string().trim().min(1).optional(),
   instructions: z.string().default(""),
   skills: z.array(z.string().trim().min(1)).default([]),
   tools: z.array(z.string().trim().min(1)).default([]),
   defaultRuntimeId: IdSchema.optional(),
+  defaultEnvironmentId: IdSchema.optional(),
   maxConcurrency: z.number().int().positive().default(1),
   metadata: MetadataSchema,
   createdAt: ISODateString,
@@ -464,6 +486,7 @@ export const DaemonRegistrationSchema = z.object({
 export const DaemonRegistrationResponseSchema = z.object({
   daemon: DaemonSchema,
   runtime: RuntimeSchema,
+  environment: EnvironmentSchema.optional(),
   secret: z.string().trim().min(1)
 });
 
@@ -549,6 +572,8 @@ export const AgentRunLeaseSchema = z.object({
   agent: z.object({
     id: IdSchema,
     name: z.string().trim().min(1),
+    role: z.string().default(""),
+    description: z.string().default(""),
     systemPrompt: z.string().default(""),
     skills: z.array(z.string().trim().min(1)).default([]),
     mcpServers: z.array(z.unknown()).default([])
@@ -558,6 +583,7 @@ export const AgentRunLeaseSchema = z.object({
     name: z.string().trim().min(1),
     provider: RuntimeProviderSchema,
     workspaceRoot: z.string().nullable(),
+    command: z.literal("pi").default("pi"),
     environment: MetadataSchema
   }),
   context: z.array(
@@ -694,6 +720,9 @@ export const SessionEventEnvelopeSchema = z.object({
 });
 
 export type Codebase = z.infer<typeof CodebaseSchema>;
+export type EnvironmentKind = z.infer<typeof EnvironmentKindSchema>;
+export type EnvironmentStatus = z.infer<typeof EnvironmentStatusSchema>;
+export type Environment = z.infer<typeof EnvironmentSchema>;
 export type RoomStatus = z.infer<typeof RoomStatusSchema>;
 export type Room = z.infer<typeof RoomSchema>;
 export type RoomAgent = z.infer<typeof RoomAgentSchema>;

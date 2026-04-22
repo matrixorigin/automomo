@@ -8,6 +8,7 @@ import {
   CodebaseSchema,
   DaemonRegistrationResponseSchema,
   DaemonSchema,
+  EnvironmentSchema,
   HandoffActionSchema,
   LeaseOutcomeUploadSchema,
   LeaseRenewRequestSchema,
@@ -40,6 +41,21 @@ describe("automomo protocol schemas", () => {
 
     expect(codebase.status).toBe("active");
     expect(codebase.metadata).toEqual({});
+  });
+
+  it("parses a local pi environment with defaults", () => {
+    const environment = EnvironmentSchema.parse({
+      id: "environment_local",
+      workspaceId: "workspace_1",
+      name: "Local automomo",
+      workspaceRoot: "/repo",
+      createdAt: now,
+      updatedAt: now
+    });
+
+    expect(environment.kind).toBe("local");
+    expect(environment.command).toBe("pi");
+    expect(environment.status).toBe("offline");
   });
 
   it("rejects empty identifiers before they reach API state", () => {

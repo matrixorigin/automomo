@@ -52,6 +52,8 @@ const context = {
   agent: {
     id: "agent_1",
     name: "Ralph",
+    role: "reviewer",
+    description: "Reviews runtime behavior.",
     model: "gpt-5.4",
     instructions: "Work carefully.",
     skills: ["runtime"],

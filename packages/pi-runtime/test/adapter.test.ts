@@ -49,6 +49,8 @@ describe("PiRuntimeAdapter", () => {
       agent: {
         id: "agent_1",
         name: "Ralph",
+        role: "builder",
+        description: "Implements focused code changes.",
         instructions: "Work carefully.",
         skills: [],
         tools: [],
@@ -97,6 +99,8 @@ describe("PiRuntimeAdapter", () => {
       agent: {
         id: "agent_1",
         name: "Builder",
+        role: "builder",
+        description: "Implements focused code changes.",
         model: "pi",
         instructions: "Write code carefully.",
         skills: [],

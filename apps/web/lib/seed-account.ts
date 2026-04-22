@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma"
+import { ensureDefaultEnvironment } from "@/lib/environments"
 
 const SEED_AGENTS = [
   {
     name: "team-lead",
+    role: "lead",
+    description: "Plans room work and coordinates the agent team.",
     color: "#F97316",
     icon: "brain",
     systemPrompt:
@@ -10,6 +13,8 @@ const SEED_AGENTS = [
   },
   {
     name: "worker-1",
+    role: "builder",
+    description: "Implements focused code changes in the active environment.",
     color: "#F59E0B",
     icon: "robot",
     systemPrompt:
@@ -17,6 +22,8 @@ const SEED_AGENTS = [
   },
   {
     name: "worker-2",
+    role: "builder",
+    description: "Implements focused code changes in the active environment.",
     color: "#F59E0B",
     icon: "robot",
     systemPrompt:
@@ -24,6 +31,8 @@ const SEED_AGENTS = [
   },
   {
     name: "reviewer",
+    role: "reviewer",
+    description: "Reviews plans, diffs, implementation notes, and test coverage.",
     color: "#10B981",
     icon: "check",
     systemPrompt:
@@ -31,6 +40,8 @@ const SEED_AGENTS = [
   },
   {
     name: "product-lead",
+    role: "product",
+    description: "Shapes product direction, analysis, and decision plans.",
     color: "#3B82F6",
     icon: "book",
     systemPrompt:
@@ -38,6 +49,8 @@ const SEED_AGENTS = [
   },
   {
     name: "design-lead",
+    role: "designer",
+    description: "Provides product design, UX, and visual guidance.",
     color: "#EC4899",
     icon: "pencil",
     systemPrompt:
@@ -51,26 +64,11 @@ const SEED_ROOM = {
     "Use this room to coordinate human and agent work for the current codebase.",
 }
 
-async function ensureLocalRuntime() {
-  return prisma.runtime.upsert({
-    where: { id: "runtime_local" },
-    update: {},
-    create: {
-      id: "runtime_local",
-      name: "Local machine",
-      provider: "pi",
-      mode: "remote_daemon",
-      workspaceRoot: process.cwd(),
-      status: "offline",
-    },
-  })
-}
-
 export async function seedNewAccount(userId: string, workspaceId: string) {
   // Guard: skip if this workspace already has agents (idempotent)
   const existingCount = await prisma.agent.count({ where: { workspaceId } })
   if (existingCount > 0) return
-  const runtime = await ensureLocalRuntime()
+  const environment = await ensureDefaultEnvironment(workspaceId)
 
   // Create all agents
   const agents = await Promise.all(
@@ -78,11 +76,13 @@ export async function seedNewAccount(userId: string, workspaceId: string) {
       prisma.agent.create({
         data: {
           name: a.name,
+          role: a.role,
+          description: a.description,
           color: a.color,
           icon: a.icon,
           harness: "automomo-daemon",
-          environmentId: "",
-          runtimeId: runtime.id,
+          environmentId: environment.id,
+          runtimeId: environment.id,
           systemPrompt: a.systemPrompt,
           skills: JSON.stringify([]),
           mcpServers: JSON.stringify([]),

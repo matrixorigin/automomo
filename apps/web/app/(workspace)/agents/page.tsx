@@ -54,10 +54,12 @@ export default function AgentsPage() {
                 </div>
                 <CardDescription
                   className="text-xs truncate"
-                  title={agent.harness === "automomo-daemon" ? agent.runtimeId ?? "" : agent.environmentId}
+                  title={agent.description || agent.role || agent.defaultEnvironmentId || ""}
                 >
-                  {agent.harness === "automomo-daemon"
-                    ? (agent.runtimeId || "No runtime")
+                  {agent.role
+                    ? `${agent.role}${agent.defaultEnvironmentId ? ` · ${agent.defaultEnvironmentId}` : ""}`
+                    : agent.harness === "automomo-daemon"
+                      ? (agent.defaultEnvironmentId || "No environment")
                     : agent.harness === "openclaw"
                       ? "External mention polling"
                       : (agent.environmentId || "No environment")}

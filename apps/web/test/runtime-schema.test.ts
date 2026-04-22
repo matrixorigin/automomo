@@ -15,12 +15,16 @@ describe("runtime schema contract", () => {
   it("defines reusable runtime and daemon run models", async () => {
     const schema = await readSchema()
     const agentRun = modelBlock(schema, "AgentRun")
+    const runtime = modelBlock(schema, "Runtime")
 
     expect(schema).toContain("model Runtime")
+    expect(schema).toContain("model Codebase")
     expect(schema).toContain("model Daemon")
     expect(schema).toContain("model AgentRun")
     expect(schema).toContain("model AgentRunLease")
     expect(schema).toMatch(/\bruntimeId\s+String\?/)
+    expect(runtime).toMatch(/\bkind\s+String\s+@default\("local"\)/)
+    expect(runtime).toMatch(/\bcommand\s+String\s+@default\("pi"\)/)
     expect(agentRun).toMatch(/\bharness\s+String\s+@default\("automomo-daemon"\)/)
   })
 
@@ -32,6 +36,9 @@ describe("runtime schema contract", () => {
     const lease = modelBlock(schema, "AgentRunLease")
 
     expect(room).toMatch(/\bruns\s+AgentRun\[\]/)
+    expect(room).toMatch(/\bcodebase\s+Codebase\?\s+@relation\(fields: \[codebaseId\]/)
+    expect(agent).toMatch(/\brole\s+String\s+@default\(""\)/)
+    expect(agent).toMatch(/\bdescription\s+String\s+@default\(""\)/)
     expect(agent).toMatch(/\bruntime\s+Runtime\?\s+@relation\(fields: \[runtimeId\]/)
     expect(agent).toMatch(/\bruns\s+AgentRun\[\]/)
     expect(agentRun).toMatch(/\broom\s+Room\s+@relation\(fields: \[roomId\]/)

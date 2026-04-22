@@ -60,6 +60,8 @@ export async function buildAgentRunLeaseResponse(leaseId: string) {
     agent: {
       id: lease.run.agent.id,
       name: lease.run.agent.name,
+      role: lease.run.agent.role,
+      description: lease.run.agent.description,
       systemPrompt: lease.run.agent.systemPrompt,
       skills: parseJsonArray(lease.run.agent.skills).filter((value): value is string => typeof value === "string"),
       mcpServers: parseJsonArray(lease.run.agent.mcpServers),
@@ -69,6 +71,7 @@ export async function buildAgentRunLeaseResponse(leaseId: string) {
       name: lease.run.runtime.name,
       provider: lease.run.runtime.provider,
       workspaceRoot: lease.run.runtime.workspaceRoot || null,
+      command: lease.run.runtime.command === "pi" ? lease.run.runtime.command : "pi",
       environment: parseJsonObject(lease.run.runtime.environmentJson),
     },
     context: messages.reverse().map((message) => ({
