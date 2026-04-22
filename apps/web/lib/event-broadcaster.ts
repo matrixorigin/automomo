@@ -3,7 +3,20 @@
 
 import { redis } from "@/lib/redis"
 
-export type EventType = "message" | "room" | "task" | "agent" | "notification" | "artifact"
+export type EventType = "message" | "room" | "task" | "agent" | "notification" | "artifact" | "run"
+
+export type RunEventStatus = "queued" | "claimed" | "running" | "completed" | "failed"
+
+export interface RunEventData {
+  runId: string
+  roomId: string
+  agentId: string
+  runtimeId: string | null
+  harness: "automomo-daemon"
+  status: RunEventStatus
+  sessionUrl?: string | null
+  failureReason?: string | null
+}
 
 export interface BroadcastEvent {
   /** Optional unique event id (e.g. Redis Stream entry id) for SSE resume. */
@@ -203,4 +216,12 @@ export const eventBroadcaster = {
   get hasRedis(): boolean {
     return redis !== null
   },
+}
+
+export function broadcastRunEvent(data: RunEventData): void {
+  eventBroadcaster.broadcast({
+    type: "run",
+    roomId: data.roomId,
+    data,
+  })
 }

@@ -52,10 +52,15 @@ export default function AgentsPage() {
                     </Link>
                   </CardTitle>
                 </div>
-                <CardDescription className="text-xs truncate" title={agent.environmentId}>
-                  {agent.harness === "openclaw"
-                    ? "OpenClaw mention polling"
-                    : (agent.environmentId || "No environment")}
+                <CardDescription
+                  className="text-xs truncate"
+                  title={agent.harness === "automomo-daemon" ? agent.runtimeId ?? "" : agent.environmentId}
+                >
+                  {agent.harness === "automomo-daemon"
+                    ? (agent.runtimeId || "No runtime")
+                    : agent.harness === "openclaw"
+                      ? "OpenClaw mention polling"
+                      : (agent.environmentId || "No environment")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex items-center gap-2">

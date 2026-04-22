@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { eventBroadcaster } from "@/lib/event-broadcaster"
+import { broadcastRunEvent, eventBroadcaster } from "@/lib/event-broadcaster"
 import { getMentionDispatchTargets, enqueueOpenClawMentions } from "@/lib/mention-dispatch"
 import { invokeAgent } from "@/lib/invoke-agent"
 
@@ -102,7 +102,11 @@ export async function completeAgentRun(input: CompleteAgentRunInput) {
     },
   })
 
-  await prisma.agentRun.updateMany({
+  const runBeforeCompletion = await prisma.agentRun.findUnique({
+    where: { id: input.runId },
+    select: { runtimeId: true, harness: true },
+  })
+  const completedRun = await prisma.agentRun.updateMany({
     where: { id: input.runId },
     data: {
       status: "completed",
@@ -121,6 +125,17 @@ export async function completeAgentRun(input: CompleteAgentRunInput) {
     data: { ...message, author: message.agent, agent: undefined },
   })
   eventBroadcaster.broadcast({ type: "room", roomId: input.roomId, data: null })
+  if (completedRun.count > 0 && runBeforeCompletion?.harness === "automomo-daemon") {
+    broadcastRunEvent({
+      runId: input.runId,
+      roomId: input.roomId,
+      agentId: input.agentId,
+      runtimeId: runBeforeCompletion.runtimeId,
+      harness: "automomo-daemon",
+      status: "completed",
+      sessionUrl: input.sessionUrl,
+    })
+  }
 
   const activeChildOrchestration = await processFanIn({
     runId: input.runId,
@@ -170,7 +185,11 @@ export async function failAgentRun(input: FailAgentRunInput) {
     },
   })
 
-  await prisma.agentRun.updateMany({
+  const runBeforeFailure = await prisma.agentRun.findUnique({
+    where: { id: input.runId },
+    select: { runtimeId: true, harness: true },
+  })
+  const failedRun = await prisma.agentRun.updateMany({
     where: { id: input.runId },
     data: {
       status: "failed",
@@ -194,6 +213,18 @@ export async function failAgentRun(input: FailAgentRunInput) {
     data: { ...message, author: message.agent, agent: undefined },
   })
   eventBroadcaster.broadcast({ type: "room", roomId: input.roomId, data: null })
+  if (failedRun.count > 0 && runBeforeFailure?.harness === "automomo-daemon") {
+    broadcastRunEvent({
+      runId: input.runId,
+      roomId: input.roomId,
+      agentId: input.agentId,
+      runtimeId: runBeforeFailure.runtimeId,
+      harness: "automomo-daemon",
+      status: "failed",
+      sessionUrl: input.sessionUrl ?? null,
+      failureReason: input.detail ? `${input.reason}\n${input.detail}` : input.reason,
+    })
+  }
 
   return {
     message: { ...message, author: message.agent, agent: undefined },
@@ -361,9 +392,10 @@ async function dispatchMentionedAgents({
       })
     }
 
-    if (targets.ozAgents.length === 0) return
+    const dispatchTargets = [...targets.ozAgents, ...targets.daemonAgents]
+    if (dispatchTargets.length === 0) return
 
-    let mentionedAgents = targets.ozAgents
+    let mentionedAgents = dispatchTargets
     if (activeChildOrchestration?.status === "running") {
       mentionedAgents = mentionedAgents.filter((target) => target.id !== activeChildOrchestration.leadAgentId)
     }

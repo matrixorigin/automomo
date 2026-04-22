@@ -291,6 +291,15 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
               <div className="inline-flex rounded-md border p-1">
                 <Button
                   type="button"
+                  variant={agent.harness === "automomo-daemon" ? "default" : "ghost"}
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={() => update({ harness: "automomo-daemon" as HarnessType })}
+                >
+                  Local
+                </Button>
+                <Button
+                  type="button"
                   variant={agent.harness === "oz" ? "default" : "ghost"}
                   size="sm"
                   className="h-7 px-3 text-xs"
@@ -309,7 +318,28 @@ Run this skill on a recurring interval (every ${pollIntervalSeconds} seconds is 
                 </Button>
               </div>
             </Field>
-            {agent.harness === "oz" ? (
+            {agent.harness === "automomo-daemon" ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="detail-runtime">Runtime ID</FieldLabel>
+                  <Input
+                    id="detail-runtime"
+                    value={agent.runtimeId ?? ""}
+                    onChange={(e) => update({ runtimeId: e.target.value })}
+                    placeholder="e.g. runtime_local"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="detail-prompt">System Prompt</FieldLabel>
+                  <Textarea
+                    id="detail-prompt"
+                    value={agent.systemPrompt}
+                    onChange={(e) => update({ systemPrompt: e.target.value })}
+                    rows={5}
+                  />
+                </Field>
+              </>
+            ) : agent.harness === "oz" ? (
               <>
                 <Field>
                   <FieldLabel htmlFor="detail-env">Environment ID</FieldLabel>

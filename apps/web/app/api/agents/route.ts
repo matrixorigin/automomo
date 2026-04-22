@@ -25,7 +25,13 @@ export async function POST(request: Request) {
   try {
     const { userId, workspaceId } = await getAuthenticatedWorkspaceContext()
     const body = await request.json()
-    const harness = typeof body.harness === "string" ? body.harness : "oz"
+    const harness = typeof body.harness === "string" ? body.harness : "automomo-daemon"
+    const selectedRuntimeId =
+      typeof body.runtimeId === "string"
+        ? body.runtimeId.trim()
+        : typeof body.selectedRuntimeId === "string"
+          ? body.selectedRuntimeId.trim()
+          : ""
     const agent = await prisma.agent.create({
       data: {
         name: body.name,
@@ -33,7 +39,8 @@ export async function POST(request: Request) {
         icon: body.icon ?? "robot",
         repoUrl: body.repoUrl ?? "",
         harness,
-        environmentId: body.environmentId ?? "",
+        environmentId: harness === "oz" ? body.environmentId ?? "" : "",
+        runtimeId: harness === "automomo-daemon" && selectedRuntimeId ? selectedRuntimeId : null,
         systemPrompt: body.systemPrompt ?? "",
         openclawConfig: stringifyOpenClawConfig(body.openclawConfig),
         skills: JSON.stringify(body.skills ?? []),

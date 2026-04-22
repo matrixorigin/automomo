@@ -32,8 +32,9 @@ export function CreateAgentDialog({
   const { createAgent } = useAgentStore()
   const [name, setName] = React.useState("")
   const [environmentId, setEnvironmentId] = React.useState("")
+  const [runtimeId, setRuntimeId] = React.useState("")
   const [systemPrompt, setSystemPrompt] = React.useState("")
-  const [harness, setHarness] = React.useState<HarnessType>("oz")
+  const [harness, setHarness] = React.useState<HarnessType>("automomo-daemon")
   const [openclawConfig, setOpenclawConfig] = React.useState({
     pollIntervalSeconds: 30,
     maxMentionsPerPoll: 5,
@@ -53,8 +54,9 @@ export function CreateAgentDialog({
       await createAgent({
         name: name.trim(),
         environmentId: harness === "oz" ? environmentId.trim() : "",
+        runtimeId: harness === "automomo-daemon" ? runtimeId.trim() || null : null,
         harness,
-        systemPrompt: harness === "oz" ? systemPrompt.trim() : "",
+        systemPrompt: harness === "openclaw" ? "" : systemPrompt.trim(),
         openclawConfig,
         color,
         icon,
@@ -62,8 +64,9 @@ export function CreateAgentDialog({
       onOpenChange(false)
       setName("")
       setEnvironmentId("")
+      setRuntimeId("")
       setSystemPrompt("")
-      setHarness("oz")
+      setHarness("automomo-daemon")
       setOpenclawConfig({
         pollIntervalSeconds: 30,
         maxMentionsPerPoll: 5,
@@ -83,7 +86,7 @@ export function CreateAgentDialog({
         <DialogHeader>
           <DialogTitle>Create Agent</DialogTitle>
           <DialogDescription>
-            Create an Oz or OpenClaw agent to participate in room mentions.
+            Create a local daemon, Oz, or OpenClaw agent to participate in room mentions.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -125,6 +128,15 @@ export function CreateAgentDialog({
               <div className="inline-flex rounded-md border p-1">
                 <Button
                   type="button"
+                  variant={harness === "automomo-daemon" ? "default" : "ghost"}
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setHarness("automomo-daemon")}
+                >
+                  Local
+                </Button>
+                <Button
+                  type="button"
                   variant={harness === "oz" ? "default" : "ghost"}
                   size="sm"
                   className="h-7 px-3 text-xs"
@@ -143,7 +155,29 @@ export function CreateAgentDialog({
                 </Button>
               </div>
             </Field>
-            {harness === "oz" ? (
+            {harness === "automomo-daemon" ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="agent-runtime">Runtime ID</FieldLabel>
+                  <Input
+                    id="agent-runtime"
+                    value={runtimeId}
+                    onChange={(e) => setRuntimeId(e.target.value)}
+                    placeholder="e.g. runtime_local"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="agent-prompt">System Prompt</FieldLabel>
+                  <Textarea
+                    id="agent-prompt"
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    placeholder="You are a backend engineering agent..."
+                    rows={3}
+                  />
+                </Field>
+              </>
+            ) : harness === "oz" ? (
               <>
                 <Field>
                   <FieldLabel htmlFor="agent-env">Environment ID</FieldLabel>

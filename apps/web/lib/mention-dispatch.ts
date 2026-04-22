@@ -11,6 +11,8 @@ export interface MentionDispatchTargets {
   mentionedAgents: MentionableAgent[]
   /** Agents that can be invoked through the Oz-style room dispatch path. */
   ozAgents: MentionableAgent[]
+  /** Local automomo daemon agents backed by AgentRun leases. */
+  daemonAgents: MentionableAgent[]
   openClawAgents: MentionableAgent[]
 }
 
@@ -24,7 +26,7 @@ export async function getMentionDispatchTargets({
   excludeAgentId?: string | null
 }): Promise<MentionDispatchTargets> {
   if (!content.includes("@")) {
-    return { mentionedAgents: [], ozAgents: [], openClawAgents: [] }
+    return { mentionedAgents: [], ozAgents: [], daemonAgents: [], openClawAgents: [] }
   }
 
   const roomAgents = await prisma.roomAgent.findMany({
@@ -38,14 +40,15 @@ export async function getMentionDispatchTargets({
 
   const mentionedNames = extractMentionedNames(content, candidates.map((agent) => agent.name))
   if (mentionedNames.length === 0) {
-    return { mentionedAgents: [], ozAgents: [], openClawAgents: [] }
+    return { mentionedAgents: [], ozAgents: [], daemonAgents: [], openClawAgents: [] }
   }
 
   const mentionedSet = new Set(mentionedNames.map((name) => name.toLowerCase()))
   const mentionedAgents = candidates.filter((agent) => mentionedSet.has(agent.name.toLowerCase()))
   return {
     mentionedAgents,
-    ozAgents: mentionedAgents.filter((agent) => agent.harness === "oz" || agent.harness === "automomo-daemon"),
+    ozAgents: mentionedAgents.filter((agent) => agent.harness === "oz"),
+    daemonAgents: mentionedAgents.filter((agent) => agent.harness === "automomo-daemon"),
     openClawAgents: mentionedAgents.filter((agent) => agent.harness === "openclaw"),
   }
 }

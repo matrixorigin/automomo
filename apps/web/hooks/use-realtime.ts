@@ -10,6 +10,28 @@ interface TaskEventData {
   taskId?: string
 }
 
+interface RunEventData {
+  runId: string
+  status: "queued" | "claimed" | "running" | "completed" | "failed"
+}
+
+export function handleRunRealtimeEvent(
+  roomId: string,
+  event: MessageEvent,
+  handlers: {
+    refreshRoom: (roomId: string) => unknown
+    fetchTasks: (roomId: string) => unknown
+  }
+) {
+  const data = JSON.parse(event.data) as Partial<RunEventData>
+  if (typeof data.runId !== "string" || typeof data.status !== "string") {
+    throw new Error("Invalid run event payload")
+  }
+  handlers.refreshRoom(roomId)
+  handlers.fetchTasks(roomId)
+  return event.lastEventId || null
+}
+
 export function useRealtime(roomId: string | null) {
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -102,6 +124,17 @@ export function useRealtime(roomId: string | null) {
         fetchArtifacts(roomId)
       } catch (error) {
         console.error("[useRealtime] Failed to parse artifact event:", error)
+      }
+    })
+
+    eventSource.addEventListener("run", (event) => {
+      try {
+        const evt = event as MessageEvent
+        const eventId = handleRunRealtimeEvent(roomId, evt, { refreshRoom, fetchTasks })
+        if (eventId) lastEventIdRef.current = eventId
+        lastHeardAtRef.current = Date.now()
+      } catch (error) {
+        console.error("[useRealtime] Failed to parse run event:", error)
       }
     })
 

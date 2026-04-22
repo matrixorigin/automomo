@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { broadcastRunEvent } from "@/lib/event-broadcaster"
 import type { AgentHarness } from "./types"
 
 export const automomoDaemonHarness: AgentHarness = {
@@ -8,7 +9,7 @@ export const automomoDaemonHarness: AgentHarness = {
       throw new Error("This local agent needs a runtime before it can be queued.")
     }
 
-    await prisma.agentRun.upsert({
+    const run = await prisma.agentRun.upsert({
       where: { id: context.invocationId },
       create: {
         id: context.invocationId,
@@ -36,8 +37,18 @@ export const automomoDaemonHarness: AgentHarness = {
       },
     })
 
+    broadcastRunEvent({
+      runId: run.id,
+      roomId: run.roomId,
+      agentId: run.agentId,
+      runtimeId: run.runtimeId,
+      harness: "automomo-daemon",
+      status: "queued",
+      sessionUrl: run.sessionUrl,
+    })
+
     return {
-      runId: context.invocationId,
+      runId: run.id,
       status: "queued",
       sessionUrl: null,
       immediateMessage: null,

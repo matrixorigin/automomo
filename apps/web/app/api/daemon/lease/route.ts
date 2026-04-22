@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { AgentRunLeaseResponseSchema, LeaseRequestSchema } from "@automomo/protocol"
 import { DaemonAuthError, requireSignedDaemonRequest } from "@/lib/daemon-auth"
 import { buildAgentRunLeaseResponse, DAEMON_LEASE_MS } from "@/lib/daemon-leases"
-import { eventBroadcaster } from "@/lib/event-broadcaster"
+import { broadcastRunEvent, eventBroadcaster } from "@/lib/event-broadcaster"
 import { prisma } from "@/lib/prisma"
 
 export async function POST(request: Request) {
@@ -58,6 +58,14 @@ export async function POST(request: Request) {
     const response = await buildAgentRunLeaseResponse(leaseId)
     if (response.lease) {
       eventBroadcaster.broadcast({ type: "room", roomId: response.lease.run.roomId, data: null })
+      broadcastRunEvent({
+        runId: response.lease.run.id,
+        roomId: response.lease.run.roomId,
+        agentId: response.lease.run.agentId,
+        runtimeId: response.lease.run.runtimeId,
+        harness: "automomo-daemon",
+        status: "claimed",
+      })
     }
     return NextResponse.json(response)
   } catch (error) {

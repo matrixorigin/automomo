@@ -133,11 +133,11 @@ export async function POST(request: Request) {
           })
         }
 
-        const ozAgents = targets.ozAgents
+        const dispatchAgents = [...targets.ozAgents, ...targets.daemonAgents]
 
         // Set agents to "running" NOW so the client sees the thinking state
         // immediately after the POST response (before after() fires).
-        for (const agent of ozAgents) {
+        for (const agent of dispatchAgents) {
           await prisma.agent.update({
             where: { id: agent.id },
             data: { status: "running", activeRoomId: roomId },
@@ -145,14 +145,14 @@ export async function POST(request: Request) {
         }
 
         // Broadcast the room update so SSE subscribers also see it
-        if (ozAgents.length > 0) {
+        if (dispatchAgents.length > 0) {
           eventBroadcaster.broadcast({ type: "room", roomId, data: null })
         }
         // Dispatch the actual agent work in after() so the response returns fast.
         // Use a single after() task so multiple mentioned agents can be invoked reliably.
         after(async () => {
           await Promise.allSettled(
-            ozAgents.map((mentionedAgent) => {
+            dispatchAgents.map((mentionedAgent) => {
               console.log(`[messages] Scheduling agent dispatch: ${mentionedAgent.name}`)
               return invokeAgent({
                 roomId,

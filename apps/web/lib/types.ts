@@ -33,6 +33,7 @@ export interface Agent {
   repoUrl: string
   harness: HarnessType
   environmentId: string
+  runtimeId?: string | null
   systemPrompt: string
   openclawConfig: {
     pollIntervalSeconds: number

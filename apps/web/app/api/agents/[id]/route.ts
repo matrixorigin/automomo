@@ -38,6 +38,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.repoUrl !== undefined) data.repoUrl = body.repoUrl
     if (body.harness !== undefined) data.harness = body.harness
     if (body.environmentId !== undefined) data.environmentId = body.environmentId
+    if (body.runtimeId !== undefined) {
+      data.runtimeId =
+        typeof body.runtimeId === "string" && body.runtimeId.trim().length > 0
+          ? body.runtimeId.trim()
+          : null
+    }
     if (body.systemPrompt !== undefined) data.systemPrompt = body.systemPrompt
     if (body.openclawConfig !== undefined) data.openclawConfig = stringifyOpenClawConfig(body.openclawConfig)
     if (body.skills !== undefined) data.skills = JSON.stringify(body.skills)

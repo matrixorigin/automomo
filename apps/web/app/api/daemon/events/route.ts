@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { AgentRunEventUploadSchema } from "@automomo/protocol"
 import { DaemonAuthError, requireSignedDaemonRequest } from "@/lib/daemon-auth"
 import { appendRunMetadataEvent, DaemonLeaseError, requireActiveLease } from "@/lib/daemon-leases"
-import { eventBroadcaster } from "@/lib/event-broadcaster"
+import { broadcastRunEvent, eventBroadcaster } from "@/lib/event-broadcaster"
 import { prisma } from "@/lib/prisma"
 
 export async function POST(request: Request) {
@@ -27,6 +27,14 @@ export async function POST(request: Request) {
       data: { metadataJson, status: "claimed" },
     })
     eventBroadcaster.broadcast({ type: "room", roomId: lease.run.roomId, data: null })
+    broadcastRunEvent({
+      runId: body.runId,
+      roomId: lease.run.roomId,
+      agentId: lease.run.agentId,
+      runtimeId: lease.run.runtimeId,
+      harness: "automomo-daemon",
+      status: "claimed",
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
