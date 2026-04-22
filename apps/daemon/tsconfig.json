@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@automomo/protocol": ["packages/protocol/src/index.ts"],
+      "@automomo/pi-runtime": ["packages/pi-runtime/src/index.ts"]
+    }
   },
   "include": ["src", "test"]
 }

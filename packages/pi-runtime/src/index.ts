@@ -130,20 +130,53 @@ export function createPiSdkRunner(options: {
 
 export function composePiPrompt(context: PiRuntimeContext) {
   const orchestration = context.session.metadata.orchestration;
+  const room = roomMetadata(context.session.metadata.room);
+  const recentContext = recentChatContext(context.session.metadata.context);
+  const workspaceRoot = context.runtime.environment.workspaceRoot;
+  const agentName = context.agent?.name ?? "Local agent";
   const parts = [
-    "You are running an automomo codebase session.",
-    `Session: ${context.session.id}`,
-    `Codebase: ${context.session.codebaseId}`,
-    context.workItem ? `Work item: ${context.workItem.title}\n${context.workItem.body}` : "Work item: unavailable",
+    `You are ${agentName}, an automomo local room agent.`,
+    `Run: ${context.session.id}`,
+    `Runtime: ${context.runtime.name} (${context.runtime.provider})`,
+    workspaceRoot ? `Workspace root: ${workspaceRoot}` : "Workspace root: unavailable",
+    room ? `Room: ${room.name}${room.description ? `\nRoom description: ${room.description}` : ""}` : undefined,
+    context.agent?.instructions ? `Agent instructions:\n${context.agent.instructions}` : undefined,
+    context.agent?.skills.length ? `Skills: ${context.agent.skills.join(", ")}` : undefined,
+    recentContext.length ? `Recent chat context:\n${recentContext.join("\n")}` : undefined,
+    context.workItem ? `User request:\n${context.workItem.body}` : "User request: unavailable",
+    context.workItem ? `Work item: ${context.workItem.title}` : undefined,
     context.workItem?.labels.length ? `Labels: ${context.workItem.labels.join(", ")}` : undefined,
     orchestration ? `Orchestration: ${JSON.stringify(orchestration)}` : undefined,
-    context.agent?.instructions ? `Agent instructions: ${context.agent.instructions}` : undefined,
-    context.agent?.skills.length ? `Skills: ${context.agent.skills.join(", ")}` : undefined,
     "Return a final fenced JSON object matching this shape:",
     '{"status":"success|failed|needs_human","summary":"short summary","result":{}}',
     "Do not include credentials or environment values in the final result."
   ];
   return parts.filter(Boolean).join("\n\n");
+}
+
+function roomMetadata(value: unknown): { name: string; description: string } | undefined {
+  if (!isRecord(value) || typeof value.name !== "string") {
+    return undefined;
+  }
+  return {
+    name: value.name,
+    description: typeof value.description === "string" ? value.description : ""
+  };
+}
+
+function recentChatContext(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!isRecord(entry) || typeof entry.content !== "string") {
+        return undefined;
+      }
+      const authorName = typeof entry.authorName === "string" ? entry.authorName : "Participant";
+      return `${authorName}: ${entry.content}`;
+    })
+    .filter((line): line is string => Boolean(line));
 }
 
 export function mapPiEvent(

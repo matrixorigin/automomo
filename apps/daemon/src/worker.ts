@@ -1,5 +1,5 @@
-import { createPiRuntimeAdapter, PiRuntimeAdapter } from "@automomo/pi-runtime";
-import { DaemonRegistration, Runtime } from "@automomo/protocol";
+import { createPiRuntimeAdapter, PiRuntimeAdapter, PiRuntimeContext } from "@automomo/pi-runtime";
+import { AgentRunLease, DaemonRegistration, Runtime, SessionEvent } from "@automomo/protocol";
 import { DaemonApiClient } from "./client";
 
 export interface DaemonWorkerOptions {
@@ -38,47 +38,139 @@ export class DaemonWorker {
 
     let result;
     try {
-      result = await this.runtimeAdapter.runSession({
-        session: lease.session,
-        workItem: lease.workItem,
-        agent: lease.agent,
-        runtime: lease.runtime
-      });
+      result = await this.runtimeAdapter.runSession(agentRunLeaseToPiContext(lease));
     } catch (err) {
       const reason = err instanceof Error ? err.message : "runtime adapter failed";
       await this.options.client.failLease({
         runtimeId: runtime.id,
         leaseId: lease.leaseId,
-        sessionId: lease.session.id,
+        runId: lease.run.id,
         reason,
-        detail: reason
+        detail: reason,
+        metadata: {}
       });
       return {
         status: "failed" as const,
         leaseId: lease.leaseId,
-        sessionId: lease.session.id,
+        runId: lease.run.id,
         reason
       };
     }
 
-    await this.options.client.uploadEvents({
-      runtimeId: runtime.id,
-      leaseId: lease.leaseId,
-      sessionId: lease.session.id,
-      events: result.events
-    });
+    if (result.events.length > 0) {
+      await this.options.client.uploadEvents({
+        runtimeId: runtime.id,
+        leaseId: lease.leaseId,
+        runId: lease.run.id,
+        events: result.events.map(toAgentRunEvent)
+      });
+    }
     await this.options.client.uploadOutcome({
       runtimeId: runtime.id,
       leaseId: lease.leaseId,
-      sessionId: lease.session.id,
-      outcome: result.outcome
+      runId: lease.run.id,
+      content: result.outcome.summary,
+      outcome: {
+        status: result.outcome.status,
+        summary: result.outcome.summary,
+        result: result.outcome.result
+      },
+      sessionUrl: null
     });
 
     return {
       status: "completed" as const,
       leaseId: lease.leaseId,
-      sessionId: lease.session.id,
+      runId: lease.run.id,
       outcomeId: result.outcome.id
     };
   }
+}
+
+export function agentRunLeaseToPiContext(lease: AgentRunLease, now: Date = new Date()): PiRuntimeContext {
+  const timestamp = now.toISOString();
+  const workspaceRoot =
+    typeof lease.runtime.environment.workspaceRoot === "string"
+      ? lease.runtime.environment.workspaceRoot
+      : lease.runtime.workspaceRoot ?? undefined;
+
+  return {
+    session: {
+      id: lease.run.id,
+      codebaseId: lease.runtime.id,
+      roomId: lease.run.roomId,
+      agentId: lease.run.agentId,
+      runtimeId: lease.runtime.id,
+      status: "running",
+      participants: [{ type: "agent", id: lease.agent.id, name: lease.agent.name }],
+      metadata: {
+        room: lease.room,
+        context: lease.context,
+        sourceMessageId: lease.run.sourceMessageId,
+        depth: lease.run.depth
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp
+    },
+    runtime: {
+      id: lease.runtime.id,
+      name: lease.runtime.name,
+      mode: "remote_daemon",
+      provider: lease.runtime.provider,
+      environment: {
+        ...lease.runtime.environment,
+        workspaceRoot,
+        networkPolicy: "restricted",
+        env: {},
+        secretRefs: []
+      },
+      status: "online",
+      capacity: 1,
+      activeSessions: 1,
+      metadata: {},
+      createdAt: timestamp,
+      updatedAt: timestamp
+    },
+    agent: {
+      id: lease.agent.id,
+      name: lease.agent.name,
+      model: lease.runtime.provider,
+      instructions: lease.agent.systemPrompt,
+      skills: lease.agent.skills,
+      tools: [],
+      defaultRuntimeId: lease.runtime.id,
+      maxConcurrency: 1,
+      metadata: { mcpServers: lease.agent.mcpServers },
+      createdAt: timestamp,
+      updatedAt: timestamp
+    },
+    workItem: {
+      id: lease.run.id,
+      codebaseId: lease.runtime.id,
+      roomId: lease.run.roomId,
+      title: `Room request for ${lease.agent.name}`,
+      body: lease.run.prompt,
+      source: "manual",
+      status: "running",
+      priority: "medium",
+      labels: ["room-run"],
+      metadata: {},
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }
+  };
+}
+
+function toAgentRunEvent(event: SessionEvent) {
+  return {
+    kind: event.kind,
+    summary: event.summary,
+    detail: event.detail ?? "",
+    metadata: {
+      ...event.metadata,
+      sessionEventId: event.id,
+      sequence: event.sequence,
+      createdAt: event.createdAt
+    }
+  };
 }

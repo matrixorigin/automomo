@@ -1,13 +1,14 @@
 import {
+  AgentRunEventUpload,
+  AgentRunFailureUpload,
+  AgentRunLease,
+  AgentRunLeaseResponseSchema,
+  AgentRunOutcomeUpload,
   DaemonRegistration,
   DaemonRegistrationResponseSchema,
-  Lease,
-  LeaseResponseSchema,
-  Outcome,
   Runtime,
   RuntimeHeartbeat,
-  RuntimeSchema,
-  SessionEvent
+  RuntimeSchema
 } from "@automomo/protocol";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 
@@ -46,9 +47,9 @@ export class DaemonApiClient {
     return RuntimeSchema.parse(parsed.runtime);
   }
 
-  async pollLease(runtimeId: string): Promise<Lease | null> {
+  async pollLease(runtimeId: string): Promise<AgentRunLease | null> {
     const payload = await this.post("/api/daemon/lease", { runtimeId });
-    return LeaseResponseSchema.parse(payload).lease;
+    return AgentRunLeaseResponseSchema.parse(payload).lease;
   }
 
   async heartbeat(input: RuntimeHeartbeat) {
@@ -59,15 +60,15 @@ export class DaemonApiClient {
     return this.post("/api/daemon/lease/renew", input);
   }
 
-  async uploadEvents(input: { runtimeId: string; leaseId: string; sessionId: string; events: SessionEvent[] }) {
+  async uploadEvents(input: AgentRunEventUpload) {
     return this.post("/api/daemon/events", input);
   }
 
-  async uploadOutcome(input: { runtimeId: string; leaseId: string; sessionId: string; outcome: Outcome }) {
+  async uploadOutcome(input: AgentRunOutcomeUpload) {
     return this.post("/api/daemon/outcome", input);
   }
 
-  async failLease(input: { runtimeId: string; leaseId: string; sessionId: string; reason: string; detail?: string; metadata?: Record<string, unknown> }) {
+  async failLease(input: AgentRunFailureUpload) {
     return this.post("/api/daemon/fail", input);
   }
 
@@ -100,12 +101,14 @@ export class DaemonApiClient {
       this.identity.runtimeId,
       nonce
     ].join("\n");
-    const signature = createHmac("sha256", this.identity.secret).update(canonical).digest("hex");
+    const signingSecret = `sha256:${createHash("sha256").update(this.identity.secret).digest("hex")}`;
+    const signature = createHmac("sha256", signingSecret).update(canonical).digest("hex");
     return {
       "x-automomo-daemon-id": this.identity.daemonId,
       "x-automomo-runtime-id": this.identity.runtimeId,
       "x-automomo-timestamp": timestamp,
       "x-automomo-nonce": nonce,
+      "x-automomo-signature-version": "hmac-sha256-v1",
       "x-automomo-signature": signature
     };
   }
