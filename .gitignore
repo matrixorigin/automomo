@@ -15,3 +15,5 @@ packages/*/node_modules/
 
 !apps/web/src/lib/
 !apps/web/src/lib/**
+!apps/web/lib/
+!apps/web/lib/**
