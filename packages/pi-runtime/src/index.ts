@@ -1,5 +1,6 @@
 import {
   Agent,
+  OutcomeArtifactInput,
   Outcome,
   OutcomeSchema,
   PiRuntimeConfig,
@@ -20,6 +21,7 @@ export interface PiRuntimeContext {
 export interface PiRuntimeResult {
   events: SessionEvent[];
   outcome: Outcome;
+  artifacts?: OutcomeArtifactInput[];
 }
 
 export interface PiRuntimeRunner {

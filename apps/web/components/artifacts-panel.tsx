@@ -2,10 +2,12 @@
 
 import * as React from "react"
 import {
+  ClipboardTextIcon,
   FileTextIcon,
+  GitDiffIcon,
   GitPullRequestIcon,
   NotepadIcon,
-  TableIcon,
+  TerminalWindowIcon,
   ArrowSquareOutIcon,
 } from "@phosphor-icons/react"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -16,22 +18,36 @@ type ArtifactIcon = React.ComponentType<{ className?: string }>
 
 const typeConfig: Record<ArtifactType, { label: string; icon: ArtifactIcon }> = {
   plan: { label: "Plans", icon: NotepadIcon },
+  patch: { label: "Patches", icon: GitDiffIcon },
+  review: { label: "Reviews", icon: ClipboardTextIcon },
   pr: { label: "PRs", icon: GitPullRequestIcon },
   document: { label: "Documents", icon: FileTextIcon },
-  sheet: { label: "Sheets", icon: TableIcon },
+  log: { label: "Logs", icon: TerminalWindowIcon },
+}
+
+const artifactSections: ArtifactType[] = ["plan", "patch", "review", "pr", "document", "log"]
+
+function normalizeArtifactType(type: string): ArtifactType {
+  return artifactSections.includes(type as ArtifactType) ? (type as ArtifactType) : "document"
 }
 
 function ArtifactCard({ artifact }: { artifact: Artifact }) {
-  const config = typeConfig[artifact.type as ArtifactType]
+  const config = typeConfig[normalizeArtifactType(artifact.type)]
   const Icon = config?.icon ?? FileTextIcon
   const ownerName = artifact.agent?.name ?? (artifact.createdBy ? "Unknown agent" : "You")
   const ownerColor = artifact.agent?.color
+  const preview = artifact.content.trim()
 
   return (
-    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden">
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+    <div className="flex gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="flex-1 min-w-0">
-        <div className="truncate">{artifact.title}</div>
+        <div className="truncate font-medium">{artifact.title}</div>
+        {preview && (
+          <div className="mt-1 max-h-8 overflow-hidden text-[11px] leading-4 text-muted-foreground">
+            {preview}
+          </div>
+        )}
         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
           {ownerColor && (
             <span
@@ -84,12 +100,21 @@ export function ArtifactsPanel({ roomId }: { roomId: string }) {
   }, [roomId, fetchArtifacts])
 
   const grouped = React.useMemo(() => {
-    const groups: Record<string, Artifact[]> = { plan: [], pr: [], document: [], sheet: [] }
+    const groups: Record<ArtifactType, Artifact[]> = {
+      plan: [],
+      patch: [],
+      review: [],
+      pr: [],
+      document: [],
+      log: [],
+    }
     for (const a of artifacts) {
-      if (groups[a.type]) groups[a.type].push(a)
+      groups[normalizeArtifactType(a.type)].push(a)
     }
     return groups
   }, [artifacts])
+
+  const presentSections = artifactSections.filter((type) => grouped[type].length > 0)
 
   return (
     <ScrollArea className="h-full">
@@ -100,17 +125,12 @@ export function ArtifactsPanel({ roomId }: { roomId: string }) {
           </div>
         ) : (
           <>
-            <ArtifactSection type="plan" artifacts={grouped.plan} />
-            {grouped.plan.length > 0 && grouped.pr.length > 0 && (
-              <Separator className="mx-4" />
-            )}
-            <ArtifactSection type="pr" artifacts={grouped.pr} />
-            {(grouped.plan.length > 0 || grouped.pr.length > 0) &&
-              (grouped.document.length > 0 || grouped.sheet.length > 0) && (
-                <Separator className="mx-4" />
-              )}
-            <ArtifactSection type="document" artifacts={grouped.document} />
-            <ArtifactSection type="sheet" artifacts={grouped.sheet} />
+            {presentSections.map((type, index) => (
+              <React.Fragment key={type}>
+                <ArtifactSection type={type} artifacts={grouped[type]} />
+                {index < presentSections.length - 1 && <Separator className="mx-4" />}
+              </React.Fragment>
+            ))}
           </>
         )}
       </div>

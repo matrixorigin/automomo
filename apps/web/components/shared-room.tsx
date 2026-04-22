@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { HashIcon, ArrowUpIcon, ArrowDownIcon, EqualsIcon, FileTextIcon, GitPullRequestIcon, NotepadIcon, TableIcon, ArrowSquareOutIcon, UserIcon, type IconProps } from "@phosphor-icons/react"
+import { HashIcon, ArrowUpIcon, ArrowDownIcon, EqualsIcon, ClipboardTextIcon, FileTextIcon, GitDiffIcon, GitPullRequestIcon, NotepadIcon, TerminalWindowIcon, ArrowSquareOutIcon, UserIcon, type IconProps } from "@phosphor-icons/react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -50,7 +50,7 @@ type PublicTask = {
 
 type PublicArtifact = {
   id: string
-  type: "plan" | "pr" | "document" | "sheet" | string
+  type: "plan" | "patch" | "review" | "pr" | "document" | "log" | string
   title: string
   content: string
   url?: string | null
@@ -301,22 +301,36 @@ function SharedKanbanBoard({ tasks }: { tasks: PublicTask[] }) {
 
 const artifactTypeConfig: Record<string, { label: string; icon: PhosphorIcon }> = {
   plan: { label: "Plans", icon: NotepadIcon },
+  patch: { label: "Patches", icon: GitDiffIcon },
+  review: { label: "Reviews", icon: ClipboardTextIcon },
   pr: { label: "PRs", icon: GitPullRequestIcon },
   document: { label: "Documents", icon: FileTextIcon },
-  sheet: { label: "Sheets", icon: TableIcon },
+  log: { label: "Logs", icon: TerminalWindowIcon },
+}
+
+const artifactSections = ["plan", "patch", "review", "pr", "document", "log"] as const
+
+function normalizePublicArtifactType(type: string) {
+  return artifactSections.includes(type as (typeof artifactSections)[number]) ? type : "document"
 }
 
 function SharedArtifactCard({ artifact }: { artifact: PublicArtifact }) {
-  const config = artifactTypeConfig[artifact.type] ?? { label: "Artifacts", icon: FileTextIcon }
+  const config = artifactTypeConfig[normalizePublicArtifactType(artifact.type)] ?? { label: "Artifacts", icon: FileTextIcon }
   const Icon = config.icon
   const ownerName = artifact.agent?.name ?? "Human"
   const ownerColor = artifact.agent?.color
+  const preview = artifact.content.trim()
 
   return (
-    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+    <div className="flex gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="flex-1 min-w-0">
-        <div className="truncate">{artifact.title}</div>
+        <div className="truncate font-medium">{artifact.title}</div>
+        {preview && (
+          <div className="mt-1 max-h-8 overflow-hidden text-[11px] leading-4 text-muted-foreground">
+            {preview}
+          </div>
+        )}
         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
           {ownerColor && (
             <span
@@ -343,19 +357,24 @@ function SharedArtifactCard({ artifact }: { artifact: PublicArtifact }) {
 
 function SharedArtifactsPanel({ artifacts }: { artifacts: PublicArtifact[] }) {
   const grouped = React.useMemo(() => {
-    const groups: Record<string, PublicArtifact[]> = { plan: [], pr: [], document: [], sheet: [] }
+    const groups: Record<string, PublicArtifact[]> = {
+      plan: [],
+      patch: [],
+      review: [],
+      pr: [],
+      document: [],
+      log: [],
+    }
     for (const a of artifacts) {
-      if (groups[a.type]) groups[a.type].push(a)
+      groups[normalizePublicArtifactType(a.type)].push(a)
     }
     return groups
   }, [artifacts])
 
-  const sections: Array<{ type: string; items: PublicArtifact[] }> = [
-    { type: "plan", items: grouped.plan },
-    { type: "pr", items: grouped.pr },
-    { type: "document", items: grouped.document },
-    { type: "sheet", items: grouped.sheet },
-  ]
+  const sections: Array<{ type: string; items: PublicArtifact[] }> = artifactSections.map((type) => ({
+    type,
+    items: grouped[type],
+  }))
   const present = sections.filter(({ type, items }) => artifactTypeConfig[type] && items.length > 0)
 
   return (
